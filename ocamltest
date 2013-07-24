@@ -1,91 +1,133 @@
 #!/usr/bin/env python
-import subprocess, sys, re
+import subprocess, sys, re, os
 
 from termcolor import colored
 
-def generate_scripts(ocamlc_output, test_name):
+class Terminal:
     """
-        2013-07-23:
-            Given a list of defined names (result of compiling the test case),
-            prepare unit test scripts to be run in the toplevel environment.
+        2013-07-27:
+            Wrapper for printing color coded messages to the console
 
-            Ignore and throw warnings for test cases that
-            do not have type `unit -> unit`
-
-            If `set_up : unit -> unit` is included, run this before every test case.
-
-            TODO make sure utility functions may be included
+            TODO add backgrounds
     """
-    test_cases = []
-    setup = None
-    for defined_name in ( x for x in ocamlc_output.split("\n") if x ):
-        if not defined_name.startswith("val "):
-            print colored("Warning: %s is not a value" % defined_name, "yellow")
-        else:
-            val_name, val_type = defined_name[4:].split(" : ", 1)
-            if val_name.startswith("test_"):
-                if val_type != "unit -> unit":
-                    print colored("Warning: skipping %s with type %s" % \
-                        (val_name, val_type))
-                else:
-                    test_cases.append(val_name)
-            elif val_name == "set_up":
-                if val_type != "unit -> unit":
-                    print colored("Error: set_up function must have type unit -> unit", "red")
-                    return []
-                elif setup:
-                    print colored("Error: set_up function defined twice", "red")
-                    return []
-                else:
-                    setup = "Test.set_up"
-    return ( (test, "module Test = %s;; %s (); Test.%s ();;" % (test_name, setup, test))
-        for test in test_cases )
 
-def test_module(module_name):
-    # TODO accept commandline arguments
-    # TODO support globbing
-    try:
-        out = subprocess.check_output("ocamlc %s.ml %s_test.ml" % (module_name, module_name), shell=True)
-    except subprocess.CalledProcessError as cpe:
-        # TODO what's the error?
-        print colored("Error compiling [%s.ml] and [%s_test.ml]" % (module_name, module_name))
-        return False
-    # TODO test error handling
-    # print "Compilation results = (%s)" % (out)
-    try:
-        out = subprocess.check_output("ocamlc -i %s.cmo %s_test.ml" % (module_name, module_name), shell=True)
-    except subprocess.CalledProcessError as cpe:
-        print colored("Compilation passed but could not echo files. This is #unexpected", "blue")
-        all_pass = False
-        out = []
-    test_name = "%s_test" % module_name.capitalize()
-    test_scripts = generate_scripts(out, test_name)
-    all_pass = True
-    for (fn_name, script) in test_scripts:
-        # TODO pass a string to `ocaml` instead?
-        with open("/tmp/ocamltest", "w") as f:
-            f.write(script)
+    def error(self, msg):
+        print(colored("Error: %s" % msg, "red"))
+
+    def failure(self, msg):
+        print(colored(msg, "red"))
+
+    def header(self, msg):
+        print(colored("--- %s ----" % msg, attrs=["bold","reverse"]))
+
+    def info(self, msg):
+        print(colored(msg, "blue"))
+
+    def success(self, msg):
+        print(colored(msg, "green"))
+
+    def warn(self, msg):
+        print(colored("Warning: %s" % msg, "magenta"))
+
+class Harness(object):
+
+    terminal = Terminal()
+
+    def __init__(self, *args):
+        # 2013-07-27: Sanitize arguments?
+        self.module_name = args[-1]
+        self.options = args[1:-1]
+
+    def generate_scripts(self, ocamlc_output, test_name):
+        """
+            2013-07-23:
+                Given a list of defined names (result of compiling the test case),
+                prepare unit test scripts to be run in the toplevel environment.
+
+                Ignore and throw warnings for test cases that
+                do not have type `unit -> unit`
+
+                If `set_up : unit -> unit` is included, run this before every test case.
+
+                TODO make sure utility functions may be included
+        """
+        test_cases = []
+        setup = None
+        for defined_name in ( x for x in ocamlc_output.split("\n") if x ):
+            if not defined_name.startswith("val "):
+                self.terminal.warn("%s is not a value" % defined_name)
+            else:
+                val_name, val_type = defined_name[4:].split(" : ", 1)
+                if val_name.startswith("test_"):
+                    if val_type != "unit -> unit":
+                        self.terminal.warn("skipping test case %s with type %s" % \
+                            (val_name, val_type))
+                    else:
+                        test_cases.append(val_name)
+                elif val_name == "set_up":
+                    if val_type != "unit -> unit":
+                        self.terminal.error("set_up function must have type unit -> unit")
+                        return []
+                    elif setup:
+                        self.terminal.error("Error: set_up function defined twice")
+                        return []
+                    else:
+                        setup = "Test.set_up"
+        return ( (test, "module Test = %s;; %s (); Test.%s ();;" % (test_name, setup, test))
+            for test in test_cases )
+
+
+    def test_module(self, module_name):
+        # TODO accept commandline arguments? (which ones?)
+        self.terminal.header("Testing %s.ml" % module_name)
         try:
-            print "Running %s..." % fn_name
-            out = subprocess.check_output("ocaml %s.cmo %s_test.cmo /tmp/ocamltest" % (module_name, module_name), shell=True)
-            print colored("success! %s" % out, "green")
+            self.terminal.info("Compiling %s.ml and %s_test.ml" % (module_name, module_name))
+            out = subprocess.check_output("ocamlc %s.ml %s_test.ml" % (module_name, module_name), shell=True)
         except subprocess.CalledProcessError as cpe:
-            print colored("fail %s" % cpe, "red")
+            # TODO what's the error? print it much nicer than this
+            self.terminal.error("Failed to compile [%s.ml] and [%s_test.ml]" % (module_name, module_name))
+            return False
+        # TODO test error handling
+        self.terminal.info("Compilation succeeded")
+        try:
+            out = subprocess.check_output("ocamlc -i %s.cmo %s_test.ml" % (module_name, module_name), shell=True)
+            all_pass = True
+        except subprocess.CalledProcessError as cpe:
+            # weird. Should never happen. Can I add a hook to email me / post issue to github?
+            self.terminal.info("Compilation passed but could not echo files. This is #unexpected")
+            out = []
             all_pass = False
-    return all_pass
+        test_name = "%s_test" % module_name.capitalize()
+        self.terminal.info("Generating test scripts for %s" % test_name)
+        ran_script = False
+        for (fn_name, script) in self.generate_scripts(out, test_name):
+            ran_script = True
+            # TODO pass a string to `ocaml` instead?
+            with open("/tmp/ocamltest", "w") as f:
+                f.write(script)
+            try:
+                self.terminal.info("Running %s..." % fn_name)
+                out = subprocess.check_output("ocaml %s.cmo %s_test.cmo /tmp/ocamltest" % (module_name, module_name), shell=True)
+                self.terminal.success("success! %s" % out)
+            except subprocess.CalledProcessError as cpe:
+                self.terminal.error("fail %s" % cpe)
+                all_pass = False
+        if not ran_script:
+            self.terminal.warn("Found 0 test cases in %s_test.ml" % module_name)
+            return False
+        else:
+            return all_pass
 
-def run():
-    module_name = sys.argv[1]
-    if module_name.endswith(".ml"):
-      module_name = module_name[:-3]
-    all_pass = test_module(module_name)
-    if all_pass:
-        print colored("ALL TESTS PASS", "green")
-    else:
-        print colored("FAILURE", "red")
+    def run(self):
+        all_pass = self.test_module(self.module_name)
+        if all_pass:
+            self.terminal.success("ALL TESTS PASS")
+        else:
+            self.terminal.failure("FAILURE")
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
-        run()
+        h = Harness(*sys.argv)
+        h.run()
     else:
-        print "Usage: ocamltest <mymodule>"
+        Terminal().info("Usage: ocamltest <mymodule>")
