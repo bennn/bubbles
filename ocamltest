@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import subprocess, sys, re
+import subprocess, sys, re, os
 
 from termcolor import colored
 
@@ -15,6 +15,7 @@ def generate_scripts(ocamlc_output, test_name):
             If `set_up : unit -> unit` is included, run this before every test case.
 
             TODO make sure utility functions may be included
+            TODO pass setup output as argument, make sure types match
     """
     test_cases = []
     setup = None
@@ -43,24 +44,23 @@ def generate_scripts(ocamlc_output, test_name):
 
 def test_module(module_name):
     # TODO accept commandline arguments
-    # TODO support globbing
     try:
         out = subprocess.check_output("ocamlc %s.ml %s_test.ml" % (module_name, module_name), shell=True)
     except subprocess.CalledProcessError as cpe:
-        # TODO what's the error?
+        # TODO what's the error? print it
         print colored("Error compiling [%s.ml] and [%s_test.ml]" % (module_name, module_name))
         return False
     # TODO test error handling
     # print "Compilation results = (%s)" % (out)
     try:
         out = subprocess.check_output("ocamlc -i %s.cmo %s_test.ml" % (module_name, module_name), shell=True)
+        all_pass = True
     except subprocess.CalledProcessError as cpe:
         print colored("Compilation passed but could not echo files. This is #unexpected", "blue")
-        all_pass = False
         out = []
+        all_pass = False
     test_name = "%s_test" % module_name.capitalize()
     test_scripts = generate_scripts(out, test_name)
-    all_pass = True
     for (fn_name, script) in test_scripts:
         # TODO pass a string to `ocaml` instead?
         with open("/tmp/ocamltest", "w") as f:
@@ -75,14 +75,21 @@ def test_module(module_name):
     return all_pass
 
 def run():
-    module_name = sys.argv[1]
-    if module_name.endswith(".ml"):
-      module_name = module_name[:-3]
-    all_pass = test_module(module_name)
-    if all_pass:
-        print colored("ALL TESTS PASS", "green")
+    # TODO support directory walking Globbings okay but ya still hafta be in the right dir
+    # TODO don't write to file
+    os.system("find . -name '%s*_test.ml' > /tmp/cases" % sys.argv[1])
+    test_cases = open("/tmp/cases", "r").readlines()
+    if test_cases == []:
+        print colored("Found 0 tests matching pattern %s" % sys.argv[1], "purple")
     else:
-        print colored("FAILURE", "red")
+        all_pass = True
+        for test in test_cases:
+            module_name = test[:-9].replace("./", "")
+            all_pass = all_pass and test_module(module_name)
+        if all_pass:
+            print colored("ALL TESTS PASS", "green")
+        else:
+            print colored("FAILURE", "red")
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
