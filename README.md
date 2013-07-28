@@ -1,6 +1,6 @@
 bubbles
 =======
-A simple unit testing framework for OCaml. At the moment it's a _very_ simple testing framework.
+A simple unit testing framework for OCaml. It's slowly coming into its own.
 
 Installation
 ------------
@@ -23,13 +23,15 @@ Usage
 Example
 -------
 Let's make a tiny lists library and run some tests on it. First, we write the source code:
-### my_lists.ml ###
-`let length = function [] -> 0 | _::t -> 1 + length t`
-
+##### my_lists.ml #####
+```
+let length = function [] -> 0 | _::t -> 1 + length t
+```
 
 Cool cool. That's a good start. Next, we write a test for our new module:
-### my_lists_test.ml ###
-`module M = My_lists
+##### my_lists_test.ml #####
+```
+module M = My_lists
 
 module State = struct
   let xs = [1;2;3]
@@ -50,26 +52,27 @@ let helper xss = List.hd xss
 let test_length4 () = 
   let mylist = [[1; 2]] in
   assert (M.length (helper mylist) > M.length mylist)
-`
+```
 
 Now we can run the tests:
+
 `ocamltest my_lists`
-and enjoy the output:
-`ALL TESTS PASS`
+
+and party. "ALL TESTS PASS"
 
 Explanation
 -----------
 There's a bit going on in `my_lists_test.ml`, so let's break that down:
-* The first line, `module M = My_lists`, imports the source code into the local namespace. It lets us call the functions we want to test.
-* The module starting at the second line, `module State = struct` creates shared state for the test cases. Lists `xs` and `ys` are defined once, here, and can be used in any number of tests later in the file. This is __convention__. See the section on __Shared State__ for an explanation.
-* Functions `test_length1` through `test_length4` are the test cases. Those get run. Their output is important to us.
-* `helper` is an auxillary function, defined for convenience right smack in the middle of the file. It is ignored by the harness.
+* The first line, `module M = My_lists`, imports the source code into the local namespace. It permits us to call the functions we want to test.
+* The module starting at the second line, `module State = struct` creates shared state for the test cases. Lists `xs` and `ys` are defined once, here, and can be used in any number of tests later in the file. This is __by convention__. See the section on __Shared State__ for an explanation.
+* Functions `test_length1` through `test_length4` are the test cases. Those get run. Their output decides wheter the suite passed or failed.
+* `helper` is an auxillary function, defined for convenience right smack in the middle of the file. It is ignored by the harness, but `test_length4` uses it. Note that this function may not be called by test 1 through 3, because it (`helper`) was not in scope when they (tests 1 - 3) were defined.
 
 Shared State
 ------------
 If you'd like to define variables for the test cases to access, just declare them before you declare the test case. Test modules are compiled just like any other, from top to bottom. Preferred convention is to keep all your helpers and variables inside a module defined at the very top of the test file. This way, the variables are easy to locate within a test file and _all_ test test cases can access them.
 
-However, there is not currently support for defining external libraries. The `State` module, if you choose to define it, __must__ exist within either the source code or the test file. (See #21)
+There no support for referencing external modules. The `State` module or its equivalents, if you choose to define them, __must__ exist within either the source code or the test file. (Issue #21 will address this)
 
 Globbing
 --------
