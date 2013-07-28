@@ -37,7 +37,8 @@ class Harness(object):
     def __init__(self, *args):
         # 2013-07-27: Sanitize arguments?
         self.pattern = args[-1]
-        self.options = args[1:-1]
+        # TODO this is not very error-tolerant
+        self.options = dict(zip(args[1:-1:2], args[2:-1:2]))
         self.print_version = ("-v" in self.options) or ("--version" in self.options)
 
     def compile(self, module_name):
@@ -72,13 +73,15 @@ class Harness(object):
             self.terminal.info("Compilation passed but could not echo files. This is #unexpected")
             return []
 
-    def find_modules(self):
+    def find_modules(self, directory):
         """
             2013-07-28:
-                Search the filesystem (cwd on down) for
+                Search the filesystem (`directory` on down)
                 modules matching the pattern given in the command line args
         """
-        matches = subprocess.check_output("find . -name '*%s*_test.ml'" % self.pattern, shell=True)
+        # TODO default arg preferable, but not working
+        command = " ".join(["find", directory or ".", "-name", "'*%s*_test.ml'" % self.pattern])
+        matches = subprocess.check_output(command, shell=True)
         # Matches look like "myfile_test.ml". Filename = the "myfile" part.
         #     also return the path to the file
         for path_to_module in matches.split("\n"):
@@ -149,11 +152,11 @@ class Harness(object):
             return
         all_pass = True
         cwd = os.getcwd()
-        for path, module_name in self.find_modules():
+        for path, module_name in self.find_modules(self.options.get("-d", None)):
             os.chdir(path)
             module_status = self.test_module(module_name)
             all_pass = all_pass and module_status
-            # TODO NEED to execute this line. 
+            # TODO NEED to execute this line.
             os.chdir(cwd)
         if all_pass:
             self.terminal.success("ALL TESTS PASS")
