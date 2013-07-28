@@ -94,6 +94,6 @@ Finding Test Files
 By default, `ocamltest mymodule` searches for files matching the pattern "mymodule" in the current working directory and its containing folders. You can change this behavior. 
 `ocamltest -d <dirname> mymodule` starts the search in the directory `dirname`, instead of the current directory. The `--directory` option does the same thing. Also, you can set the environment variable `OCAMLTEST_HOME`, which causes the harness to search from that directory instead of the current one. It's like running `ocamltest -d $OCAMLTEST_HOME mymodule`, just with less typing. 
 
-Author: _Ben Greenman (blg59)_
+_Author_: Ben Greenman (blg59)
 
-Last Updated: _2013-07-28_
+_Last Updated_: 2013-07-28
