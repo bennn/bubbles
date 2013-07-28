@@ -16,8 +16,60 @@ Just remove the repo and reset your path.
 Usage
 -----
 1. Make a simple module. Let's pretend its called `mymodule.ml`. 
-2. Make a test case `mymodule_test.ml`. The `_test` suffix is important!
+2. Make a test file `mymodule_test.ml`. The `_test` suffix is important!
+   Test file should contain `unit -> unit` functions with the prefix `test_`. These are the test cases. Other functions and modules may be defined inside the test file, but those will not be executed as part of the suite.
 3. Run `ocamltest mymodule` and hope for the best.
+
+Example
+-------
+Let's make a tiny lists library and run some tests on it. First, we write the source code:
+### my_lists.ml ###
+`let length = function [] -> 0 | _::t -> 1 + length t`
+
+
+Cool cool. That's a good start. Next, we write a test for our new module:
+### my_lists_test.ml ###
+`module M = My_lists
+
+module State = struct
+  let xs = [1;2;3]
+  let ys = [1;2;3;4]
+end
+
+let test_length1 () =
+  assert (M.length [1;2] = 2)
+
+let test_length2 () = 
+  assert (M.length State.xs = 3)
+
+let test_length3 () = 
+  assert (M.length State.ys = 1 + M.length State.xs)
+
+let helper xss = List.hd xss
+
+let test_length4 () = 
+  let mylist = [[1; 2]] in
+  assert (M.length (helper mylist) > M.length mylist)
+`
+
+Now we can run the tests:
+`ocamltest my_lists`
+and enjoy the output:
+`ALL TESTS PASS`
+
+Explanation
+-----------
+There's a bit going on in `my_lists_test.ml`, so let's break that down:
+* The first line, `module M = My_lists`, imports the source code into the local namespace. It lets us call the functions we want to test.
+* The module starting at the second line, `module State = struct` creates shared state for the test cases. Lists `xs` and `ys` are defined once, here, and can be used in any number of tests later in the file. This is __convention__. See the section on __Shared State__ for an explanation.
+* Functions `test_length1` through `test_length4` are the test cases. Those get run. Their output is important to us.
+* `helper` is an auxillary function, defined for convenience right smack in the middle of the file. It is ignored by the harness.
+
+Shared State
+------------
+If you'd like to define variables for the test cases to access, just declare them before you declare the test case. Test modules are compiled just like any other, from top to bottom. Preferred convention is to keep all your helpers and variables inside a module defined at the very top of the test file. This way, the variables are easy to locate within a test file and _all_ test test cases can access them.
+
+However, there is not currently support for defining external libraries. The `State` module, if you choose to define it, __must__ exist within either the source code or the test file. (See #21)
 
 Globbing
 --------

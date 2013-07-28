@@ -32,7 +32,7 @@ class Terminal:
 class Harness(object):
 
     terminal = Terminal()
-    version = "0.2"
+    version = "0.3"
 
     def __init__(self, *args):
         # 2013-07-27: Sanitize arguments?
@@ -93,16 +93,11 @@ class Harness(object):
                 Ignore and throw warnings for test cases that
                 do not have type `unit -> unit`
 
-                If `set_up : unit -> unit` is included, run this before every test case.
-
                 TODO make sure utility functions may be included
         """
         test_cases = []
-        setup = ""
         for defined_name in ( x for x in tester_functions if x ):
-            if not defined_name.startswith("val "):
-                self.terminal.warn("%s is not a value" % defined_name)
-            else:
+            if defined_name.startswith("val "):
                 val_name, val_type = defined_name[4:].split(" : ", 1)
                 if val_name.startswith("test_"):
                     if val_type != "unit -> unit":
@@ -110,24 +105,15 @@ class Harness(object):
                             (val_name, val_type))
                     else:
                         test_cases.append(val_name)
-                elif val_name == "set_up":
-                    if val_type != "unit -> unit":
-                        self.terminal.error("set_up function must have type unit -> unit")
-                        return []
-                    elif setup:
-                        self.terminal.error("Error: set_up function defined twice")
-                        return []
-                    else:
-                        setup = "Test.set_up"
-        return ( (test, self.make_toplevel_input(test_name, setup, test))
+        return ( (test, self.make_toplevel_input(test_name, test))
             for test in test_cases )
 
-    def make_toplevel_input(self, test_name, setup, test):
+    def make_toplevel_input(self, test_name, test):
         """
             2013-07-28:
                 Take necessary information & write something to send to the toplevel.
         """
-        return "module Test = %s;; %s (); Test.%s ();;" % (test_name, setup, test)
+        return "module Test = %s;; Test.%s ();;" % (test_name, test)
 
     def test_module(self, module_name):
         # TODO accept commandline arguments? (which ones?)
