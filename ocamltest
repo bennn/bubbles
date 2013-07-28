@@ -32,13 +32,48 @@ class Terminal:
 class Harness(object):
 
     terminal = Terminal()
+    version = "0.2"
 
     def __init__(self, *args):
         # 2013-07-27: Sanitize arguments?
         self.module_name = args[-1]
+        # 2013-07-28: TODO this is w-o-n-k-y
+        self.module_tuple = (self.module_name, self.module_name)
         self.options = args[1:-1]
+        self.print_version = ("-v" in self.options) or ("--version" in self.options)
 
-    def generate_scripts(self, ocamlc_output, test_name):
+    def compile(self):
+        """
+            2013-07-28:
+                Compile module + corresponding test case
+
+                TODO handle errors a little cleaner? I worry about the number
+                     of if/else branches in the code. Monadize?
+                TODO test error handling
+        """
+        self.terminal.info("Compiling %s.ml and %s_test.ml" % self.module_tuple)
+        try:
+            out = subprocess.check_output("ocamlc %s.ml %s_test.ml" % self.module_tuple, shell=True)
+            return True
+        except subprocess.CalledProcessError as cpe:
+            # TODO what's the error? print it much nicer than this
+            self.terminal.error("Failed to compile [%s.ml] and [%s_test.ml]" % self.module_tuple)
+            return False
+
+    def extract_tester_functions(self, module_name):
+        """
+            2013-07-28:
+                Get a list of callable functions native to `'module_name'.test`
+        """
+        try:
+            functions_string = subprocess.check_output("ocamlc -i %s.cmo %s_test.ml" % self.module_tuple, shell=True)
+            return functions_string.split("\n")
+        except subprocess.CalledProcessError as cpe:
+            # weird. Should never happen. Can I add a hook to email me / post issue to github?
+            self.terminal.info("Compilation passed but could not echo files. This is #unexpected")
+            return []
+
+    def generate_scripts(self, tester_functions, test_name):
         """
             2013-07-23:
                 Given a list of defined names (result of compiling the test case),
@@ -53,7 +88,7 @@ class Harness(object):
         """
         test_cases = []
         setup = None
-        for defined_name in ( x for x in ocamlc_output.split("\n") if x ):
+        for defined_name in ( x for x in tester_functions if x ):
             if not defined_name.startswith("val "):
                 self.terminal.warn("%s is not a value" % defined_name)
             else:
@@ -73,61 +108,66 @@ class Harness(object):
                         return []
                     else:
                         setup = "Test.set_up"
-        return ( (test, "module Test = %s;; %s (); Test.%s ();;" % (test_name, setup, test))
+        return ( (test, self.make_toplevel_input(test_name, setup, test))
             for test in test_cases )
 
+    def make_toplevel_input(self, test_name, setup, test):
+        """
+            2013-07-28:
+                Take necessary information & write something to send to the toplevel.
+        """
+        return "module Test = %s;; %s (); Test.%s ();;" % (test_name, setup, test)
 
     def test_module(self, module_name):
         # TODO accept commandline arguments? (which ones?)
         self.terminal.header("Testing %s.ml" % module_name)
-        try:
-            self.terminal.info("Compiling %s.ml and %s_test.ml" % (module_name, module_name))
-            out = subprocess.check_output("ocamlc %s.ml %s_test.ml" % (module_name, module_name), shell=True)
-        except subprocess.CalledProcessError as cpe:
-            # TODO what's the error? print it much nicer than this
-            self.terminal.error("Failed to compile [%s.ml] and [%s_test.ml]" % (module_name, module_name))
+        compilation_succeeded = self.compile()
+        if not compilation_succeeded:
             return False
-        # TODO test error handling
-        self.terminal.info("Compilation succeeded")
-        try:
-            out = subprocess.check_output("ocamlc -i %s.cmo %s_test.ml" % (module_name, module_name), shell=True)
-            all_pass = True
-        except subprocess.CalledProcessError as cpe:
-            # weird. Should never happen. Can I add a hook to email me / post issue to github?
-            self.terminal.info("Compilation passed but could not echo files. This is #unexpected")
-            out = []
-            all_pass = False
-        test_name = "%s_test" % module_name.capitalize()
-        self.terminal.info("Generating test scripts for %s" % test_name)
-        ran_script = False
-        for (fn_name, script) in self.generate_scripts(out, test_name):
-            ran_script = True
-            # TODO pass a string to `ocaml` instead?
-            with open("/tmp/ocamltest", "w") as f:
-                f.write(script)
-            try:
-                self.terminal.info("Running %s..." % fn_name)
-                out = subprocess.check_output("ocaml %s.cmo %s_test.cmo /tmp/ocamltest" % (module_name, module_name), shell=True)
-                self.terminal.success("success! %s" % out)
-            except subprocess.CalledProcessError as cpe:
-                self.terminal.error("fail %s" % cpe)
-                all_pass = False
-        if not ran_script:
+        self.terminal.info("Compilation succeeded, generating test scripts...")
+        self.terminal.info("Generating test scripts for %s" % module_name)
+        tester_functions = self.extract_tester_functions(module_name)
+        if tester_functions == []:
             self.terminal.warn("Found 0 test cases in %s_test.ml" % module_name)
             return False
-        else:
-            return all_pass
+        all_pass = True
+        test_name = "%s_test" % module_name.capitalize()
+        for (fn_name, script) in self.generate_scripts(tester_functions, test_name):
+            self.terminal.info("Running %s..." % fn_name)
+            test_status = self.run_test(script)
+            all_pass = all_pass and test_status
+        return all_pass
 
     def run(self):
+        if self.print_version:
+            # TODO sync versioning with github?
+            self.terminal.info("ocamltest version %s" % self.version)
+            return
         all_pass = self.test_module(self.module_name)
         if all_pass:
             self.terminal.success("ALL TESTS PASS")
         else:
             self.terminal.failure("FAILURE")
 
+    def run_test(self, script):
+        """
+            2013-07-28:
+                Execute a single test script.
+        """
+        # TODO pass a string to `ocaml` instead?
+        with open("/tmp/ocamltest", "w") as f:
+            f.write(script)
+        try:
+            out = subprocess.check_output("ocaml %s.cmo %s_test.cmo /tmp/ocamltest" % self.module_tuple, shell=True)
+            self.terminal.success("success! %s" % out)
+            return True
+        except subprocess.CalledProcessError as cpe:
+            self.terminal.error("fail %s" % cpe)
+            return False
+
 if __name__ == "__main__":
-    if len(sys.argv) == 2:
+    if len(sys.argv) == 1:
+        Terminal().info("Usage: ocamltest <mymodule>")
+    else:
         h = Harness(*sys.argv)
         h.run()
-    else:
-        Terminal().info("Usage: ocamltest <mymodule>")
