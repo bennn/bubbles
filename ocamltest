@@ -36,13 +36,11 @@ class Harness(object):
 
     def __init__(self, *args):
         # 2013-07-27: Sanitize arguments?
-        self.module_name = args[-1]
-        # 2013-07-28: TODO this is w-o-n-k-y
-        self.module_tuple = (self.module_name, self.module_name)
+        self.pattern = args[-1]
         self.options = args[1:-1]
         self.print_version = ("-v" in self.options) or ("--version" in self.options)
 
-    def compile(self):
+    def compile(self, module_name):
         """
             2013-07-28:
                 Compile module + corresponding test case
@@ -51,13 +49,14 @@ class Harness(object):
                      of if/else branches in the code. Monadize?
                 TODO test error handling
         """
-        self.terminal.info("Compiling %s.ml and %s_test.ml" % self.module_tuple)
+        mtuple = (module_name, module_name)
+        self.terminal.info("Compiling %s.ml and %s_test.ml" % mtuple)
         try:
-            out = subprocess.check_output("ocamlc %s.ml %s_test.ml" % self.module_tuple, shell=True)
+            out = subprocess.check_output("ocamlc %s.ml %s_test.ml" % mtuple, shell=True)
             return True
         except subprocess.CalledProcessError as cpe:
             # TODO what's the error? print it much nicer than this
-            self.terminal.error("Failed to compile [%s.ml] and [%s_test.ml]" % self.module_tuple)
+            self.terminal.error("Failed to compile [%s.ml] and [%s_test.ml]" % mtuple)
             return False
 
     def extract_tester_functions(self, module_name):
@@ -66,12 +65,20 @@ class Harness(object):
                 Get a list of callable functions native to `'module_name'.test`
         """
         try:
-            functions_string = subprocess.check_output("ocamlc -i %s.cmo %s_test.ml" % self.module_tuple, shell=True)
+            functions_string = subprocess.check_output("ocamlc -i %s.cmo %s_test.ml" % (module_name, module_name), shell=True)
             return functions_string.split("\n")
         except subprocess.CalledProcessError as cpe:
             # weird. Should never happen. Can I add a hook to email me / post issue to github?
             self.terminal.info("Compilation passed but could not echo files. This is #unexpected")
             return []
+
+    def find_modules(self):
+        """
+            2013-07-28:
+                Search the filesystem (from cwd on down) for
+                modules matching the pattern given in the command line args
+        """
+        return [self.pattern]
 
     def generate_scripts(self, tester_functions, test_name):
         """
@@ -121,7 +128,7 @@ class Harness(object):
     def test_module(self, module_name):
         # TODO accept commandline arguments? (which ones?)
         self.terminal.header("Testing %s.ml" % module_name)
-        compilation_succeeded = self.compile()
+        compilation_succeeded = self.compile(module_name)
         if not compilation_succeeded:
             return False
         self.terminal.info("Compilation succeeded, generating test scripts...")
@@ -134,7 +141,7 @@ class Harness(object):
         test_name = "%s_test" % module_name.capitalize()
         for (fn_name, script) in self.generate_scripts(tester_functions, test_name):
             self.terminal.info("Running %s..." % fn_name)
-            test_status = self.run_test(script)
+            test_status = self.run_test(module_name, script)
             all_pass = all_pass and test_status
         return all_pass
 
@@ -143,13 +150,16 @@ class Harness(object):
             # TODO sync versioning with github?
             self.terminal.info("ocamltest version %s" % self.version)
             return
-        all_pass = self.test_module(self.module_name)
+        all_pass = True
+        for module_name in self.find_modules():
+            module_status = self.test_module(module_name)
+            all_pass = all_pass and module_status
         if all_pass:
             self.terminal.success("ALL TESTS PASS")
         else:
             self.terminal.failure("FAILURE")
 
-    def run_test(self, script):
+    def run_test(self, module_name, script):
         """
             2013-07-28:
                 Execute a single test script.
@@ -158,7 +168,7 @@ class Harness(object):
         with open("/tmp/ocamltest", "w") as f:
             f.write(script)
         try:
-            out = subprocess.check_output("ocaml %s.cmo %s_test.cmo /tmp/ocamltest" % self.module_tuple, shell=True)
+            out = subprocess.check_output("ocaml %s.cmo %s_test.cmo /tmp/ocamltest" % (module_name, module_name), shell=True)
             self.terminal.success("success! %s" % out)
             return True
         except subprocess.CalledProcessError as cpe:
