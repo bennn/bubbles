@@ -50,14 +50,16 @@ class Harness(object):
                      of if/else branches in the code. Monadize?
                 TODO test error handling
         """
-        mtuple = (module_name, module_name)
-        self.terminal.info("Compiling %s.ml and %s_test.ml" % mtuple)
+        ml_file = "%s.ml" % module_name
+        test_file = "%s_test.ml" % module_name
+        self.terminal.info("Compiling %s and %s" % (ml_file, test_file))
         try:
-            out = subprocess.check_output("ocamlc %s.ml %s_test.ml" % mtuple, shell=True)
+            command = " ".join(["ocamlc", ml_file, test_file])
+            out = subprocess.check_output(command, shell=True)
             return True
         except subprocess.CalledProcessError as cpe:
             # TODO what's the error? print it much nicer than this
-            self.terminal.error("Failed to compile [%s.ml] and [%s_test.ml]" % mtuple)
+            self.terminal.error("Failed to compile [%s] and [%s_test]" % (ml_file, test_file))
             return False
 
     def extract_tester_functions(self, module_name):
@@ -66,7 +68,8 @@ class Harness(object):
                 Get a list of callable functions native to `'module_name'.test`
         """
         try:
-            functions_string = subprocess.check_output("ocamlc -i %s.cmo %s_test.ml" % (module_name, module_name), shell=True)
+            command = " ".join(["ocamlc", "-i", "%s.cmo" % module_name, "%s_test.ml" % module_name])
+            functions_string = subprocess.check_output(command, shell=True)
             return functions_string.split("\n")
         except subprocess.CalledProcessError as cpe:
             # weird. Should never happen. Can I add a hook to email me / post issue to github?
