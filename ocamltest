@@ -38,7 +38,7 @@ class Harness(object):
         # 2013-07-27: Sanitize arguments?
         self.pattern = args[-1]
         # TODO this is not very error-tolerant
-        self.options = dict(zip(args[1:-1:2], args[2:-1:2]))
+        self.options = self.get_options(args[1:-1])
         self.print_version = ("-v" in self.options) or ("--version" in self.options)
 
     def compile(self, module_name):
@@ -118,6 +118,10 @@ class Harness(object):
         return ( (test, self.make_toplevel_input(test_name, test))
             for test in test_cases )
 
+    def get_options(self, args):
+        args = self._collapse_flags(args)
+        return dict(zip(args[:2], args[1:2]))
+
     def make_toplevel_input(self, test_name, test):
         """
             2013-07-28:
@@ -178,6 +182,28 @@ class Harness(object):
         except subprocess.CalledProcessError as cpe:
             self.terminal.error("fail %s" % cpe)
             return False
+
+    def _collapse_flags(self, args):
+        new_args = []
+        for arg in args:
+            if arg.startswith("--"):
+                new_args.append(arg[1:3])
+            else:
+                new_args.append(arg)
+        return new_args
+
+    def _print_help(self):
+        """
+            2013-07-28:
+                Documentation stub.
+        """
+        hs = [
+            "Supported options:",
+            "-d --directory : use this directory as the base for the suite", #2013-07-28: TODO explain this better
+            "-h --help : print this message",
+            "-v --version : echo version number, then quit",
+        ]
+        return "\n".join(hs)
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
