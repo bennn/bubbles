@@ -78,7 +78,7 @@ Globbing
 --------
 You can supply ocamltest with a pattern instead of a module name. Say you have a directory with the following four files: `module1.ml`, `module2.ml`, `module1_test.ml`, `module2_test.ml`.
 
-Running `ocamltest 'module*'` will execute the harnesses `module1_test.ml` and `module2_test.ml`. (The quotes might matter, depends on which shell you use.)
+Running `ocamltest 'module*'` inside this directory will execute the harnesses `module1_test.ml` and `module2_test.ml`. (The quotes might matter, depends on which shell you use.)
 Actually, you can do even better. Leading and trailing asterisks are implicit, so the following patterns achieve the same results:
 
 * `ocamltest module`
@@ -87,5 +87,10 @@ Actually, you can do even better. Leading and trailing asterisks are implicit, s
 * `ocamltest 'od*l'`
 
 You get the idea. Be careful getting too lazy if you have lots of test files around and don't want to run 'em all. Or don't be careful and just run all the tests all the time. 
+
+Finding Test Files
+------------------
+
+By default, `ocamltest mymodule` searches for files matching the pattern "mymodule" in the current working directory and its containing folders. You can change this behavior. `ocamltest -d <dirname> mymodule` starts the search in the directory `dirname`, instead of the current directory (the `--directory` option does the same thing). Also, you can set the environment variable `OCAMLTEST_HOME`, which causes the harness to search from that directory instead of the current one. It's like running `ocamltest -d $OCAMLTEST_HOME mymodule`, just with less typing. 
 
 2013-07-28, Ben Greenman (blg59)
