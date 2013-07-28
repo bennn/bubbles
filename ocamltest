@@ -75,14 +75,21 @@ class Harness(object):
     def find_modules(self):
         """
             2013-07-28:
-                Search the filesystem (cwd only) for
+                Search the filesystem (cwd on down) for
                 modules matching the pattern given in the command line args
         """
         matches = subprocess.check_output("find . -name '*%s*_test.ml'" % self.pattern, shell=True)
-        # Matches look like "myfile_test.ml". Just return the "myfile" part.
-        # 2013-07-28: Remove the leading ./ too
-        return ( test_module[2:-8]
-            for test_module in matches.split("\n") if test_module )
+        # Matches look like "myfile_test.ml". Filename = the "myfile" part.
+        #     also return the path to the file
+        for path_to_module in matches.split("\n"):
+            # Filter empties
+            if path_to_module:
+                # Find the last /. This is where the path ends and the module starts
+                splitIndex = 0 - (path_to_module[::-1].find("/"))
+                path = path_to_module[:splitIndex]
+                # Cut off the ".ml" suffix.
+                module_name = path_to_module[splitIndex:-8]
+                yield (path, module_name)
 
     def generate_scripts(self, tester_functions, test_name):
         """
@@ -141,9 +148,13 @@ class Harness(object):
             self.terminal.info("ocamltest version %s" % self.version)
             return
         all_pass = True
-        for module_name in self.find_modules():
+        cwd = os.getcwd()
+        for path, module_name in self.find_modules():
+            os.chdir(path)
             module_status = self.test_module(module_name)
             all_pass = all_pass and module_status
+            # TODO NEED to execute this line. 
+            os.chdir(cwd)
         if all_pass:
             self.terminal.success("ALL TESTS PASS")
         else:
