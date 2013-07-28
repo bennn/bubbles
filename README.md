@@ -24,7 +24,7 @@ Globbing
 You can supply ocamltest with a pattern instead of a module name. Say you have a directory with the following four files: `module1.ml`, `module2.ml`, `module1_test.ml`, `module2_test.ml`.
 
 Running `ocamltest 'module*'` will execute the harnesses `module1_test.ml` and `module2_test.ml`. (The quotes might matter, depends on which shell you use.)
-Actually, you can do even better. Leading and trailing asterisks are implicit, so the following patters achieve the same results:
+Actually, you can do even better. Leading and trailing asterisks are implicit, so the following patterns achieve the same results:
 
 * `ocamltest module`
 * `ocamltest mod`
