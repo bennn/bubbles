@@ -79,8 +79,8 @@ class Harness(object):
                 Search the filesystem (`directory` on down)
                 modules matching the pattern given in the command line args
         """
-        # TODO default arg preferable, but not working
-        command = " ".join(["find", directory or ".", "-name", "'*%s*_test.ml'" % self.pattern])
+        directory = self._directory_fallback(directory)
+        command = " ".join(["find", directory, "-name", "'*%s*_test.ml'" % self.pattern])
         matches = subprocess.check_output(command, shell=True)
         # Matches look like "myfile_test.ml". Filename = the "myfile" part.
         #     also return the path to the file
@@ -191,6 +191,21 @@ class Harness(object):
             else:
                 new_args.append(arg)
         return new_args
+
+    def _directory_fallback(self, directory):
+        """
+            2013-07-28:
+                Q: which part of the filesystem should we search for test files?
+                A: the part the user specified with an option,
+                   the part set in an environment variable,
+                   or the current working directory
+        """
+        if directory:
+            return directory
+        elif os.environ.get('OCAMLTEST_HOME'):
+            return os.environ['OCAMLTEST_HOME']
+        else:
+            return os.getcwd()
 
     def _print_help(self):
         """
