@@ -75,10 +75,14 @@ class Harness(object):
     def find_modules(self):
         """
             2013-07-28:
-                Search the filesystem (from cwd on down) for
+                Search the filesystem (cwd only) for
                 modules matching the pattern given in the command line args
         """
-        return [self.pattern]
+        matches = subprocess.check_output("find . -name '*%s*_test.ml'" % self.pattern, shell=True)
+        # Matches look like "myfile_test.ml". Just return the "myfile" part.
+        # 2013-07-28: Remove the leading ./ too
+        return ( test_module[2:-8]
+            for test_module in matches.split("\n") if test_module )
 
     def generate_scripts(self, tester_functions, test_name):
         """
@@ -94,7 +98,7 @@ class Harness(object):
                 TODO make sure utility functions may be included
         """
         test_cases = []
-        setup = None
+        setup = ""
         for defined_name in ( x for x in tester_functions if x ):
             if not defined_name.startswith("val "):
                 self.terminal.warn("%s is not a value" % defined_name)
@@ -177,7 +181,7 @@ class Harness(object):
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
-        Terminal().info("Usage: ocamltest <mymodule>")
+        Terminal().info("Usage: ocamltest <pattern>")
     else:
         h = Harness(*sys.argv)
         h.run()
