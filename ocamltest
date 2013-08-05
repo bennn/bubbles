@@ -68,7 +68,7 @@ class Harness(object):
         self.options = self.get_options(args[1:-1])
         self.print_version = ("-v" in self.options) or ("--version" in self.options)
 
-    def compile(self, module_name):
+    def compile(self, module_name, libs):
         """
             2013-07-28:
                 Compile module + corresponding test case
@@ -79,9 +79,14 @@ class Harness(object):
         """
         ml_file = "%s.ml" % module_name
         test_file = "%s_test.ml" % module_name
+        # TODO this is UGLY
+        libs2 = []
+        for l in libs:
+            subprocess.check_output("cp %s ." % l, shell=True)
+            libs2.append(l.split("/")[-1])
         self.terminal.info("Compiling %s and %s" % (ml_file, test_file))
         try:
-            command = " ".join(["ocamlc", ml_file, test_file])
+            command = " ".join(["ocamlc"] + libs2 + [ml_file, test_file])
             subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
             return True
         except subprocess.CalledProcessError as cpe:
@@ -163,11 +168,11 @@ class Harness(object):
         """
         return "%s.%s ();;" % (test_name.capitalize(), test)
 
-    def test_module(self, module_name):
+    def test_module(self, module_name, libs):
         # TODO accept commandline arguments? (which ones?)
         error_messages = []
         self.terminal.header("Testing %s.ml" % module_name)
-        if self.compile(module_name):
+        if self.compile(module_name, libs):
             self.terminal.info("Compilation succeeded! Generating test scripts...")
             values = self.get_values(module_name)
             test_name = "%s_test" % module_name
@@ -177,7 +182,7 @@ class Harness(object):
             else:
                 for (fn_name, script) in test_scripts:
                     self.terminal.run("Running %s..." % fn_name)
-                    err_msg = self.run_test(module_name, script)
+                    err_msg = self.run_test(module_name, script, libs)
                     if err_msg:
                         error_messages.append((fn_name, err_msg))
         return error_messages
@@ -187,22 +192,22 @@ class Harness(object):
             # TODO sync versioning with github?
             self.terminal.info("ocamltest version %s" % self.version)
             return
-        error_messages = {}
         cwd = os.getcwd()
+        error_messages = {}
+        libs = self._compile_library(cwd)
         with Timer() as t:
             for path, module_name in self.find_modules(self.options.get("-d", None)):
                 os.chdir(path)
-                errors = self.test_module(module_name)
+                errors = self.test_module(module_name, libs)
                 if bool(errors):
                     error_messages[module_name] = errors
                 print("") # separator
-                os.chdir(cwd)
         if error_messages == {}:
             self.terminal.success("ALL TESTS PASS in %0.3f seconds" % t.duration)
         else: 
             self.terminal.pprint_failures(error_messages, t.duration)
 
-    def run_test(self, module_name, script):
+    def run_test(self, module_name, script, libs):
         """
             2013-07-28:
                 Execute a single test script.
@@ -215,9 +220,11 @@ class Harness(object):
         # TODO add assertions and helpers library object files
         command = " ".join([
             "echo \"%s\" |" % script, 
-            "ocaml", "%s.cmo" % module_name,  
-            "%s_test.cmo" % module_name
-        ])
+            "ocaml", libs[0].split("/")[-1][:-3] + ".cmo",
+            "%s.cmo" % module_name,  
+            "%s_test.cmo" % module_name]
+        )
+        print "caommed = %s" % command
         with Timer() as t:
             try:
                 out = subprocess.check_output(command, shell=True)
@@ -258,6 +265,30 @@ class Harness(object):
             else:
                 new_args.append(arg)
         return new_args
+
+    def _compile_library(self, cwd):
+        """
+            2013-08-05:
+                Ensure that library functions are compiled.
+                Look in OCAMLTEST_HOME for the unittest library.
+                Maybe there will be other stuff here later
+
+                TODO These aren't changing often, so maybe skip this step if the
+                .cmo files already exist
+        """
+        libs = []
+        ocamltest_home = os.environ.get('OCAMLTEST_HOME')
+        if ocamltest_home:
+            os.chdir(ocamltest_home)
+            if os.path.exists("ocamltest.ml"):
+                try:
+                    # subprocess.check_output("ocamlc ocamltest.ml", shell=True, stderr=subprocess.STDOUT)
+                    libs.append("%s/ocamltest.ml" % ocamltest_home)
+                except subprocess.CalledProcessError:
+                    pass
+            os.chdir(cwd)
+        return libs
+            
 
     def _directory_fallback(self, directory):
         """
