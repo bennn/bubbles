@@ -30,10 +30,17 @@ class Terminal:
         print(colored("--- %s ----" % msg, attrs=["bold","reverse"]))
 
     def info(self, msg):
-        print(colored(msg, "magenta"))
+        print(colored(msg, "blue"))
+
+    def nocompile(self, msg):
+        print(colored("Compilation Failed:\n  %s" % msg.strip().replace("\n", "\n  "), color="red"))
+        print("**********************************************************************")
+        print("* IF YOU WANT TO SUCCEED IN THIS CLASS YOUR CODE MUST COMPILE -mgn29 *")
+        print("**********************************************************************")
+        time.sleep(0.7)
 
     def run(self, msg):
-        print(colored(msg, "blue"))
+        print(colored(msg, "yellow"))
 
     def success(self, msg):
         print(colored(msg, "green"))
@@ -67,26 +74,11 @@ class Harness(object):
         self.terminal.info("Compiling %s and %s" % (ml_file, test_file))
         try:
             command = " ".join(["ocamlc", ml_file, test_file])
-            out = subprocess.check_output(command, shell=True)
+            subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
             return True
         except subprocess.CalledProcessError as cpe:
-            # TODO what's the error? print it much nicer than this
-            self.terminal.error("Failed to compile [%s] and [%s_test]" % (ml_file, test_file))
+            self.terminal.nocompile(cpe.output)
             return False
-
-    def extract_tester_functions(self, module_name):
-        """
-            2013-07-28:
-                Get a list of callable functions native to `'module_name'.test`
-        """
-        try:
-            command = " ".join(["ocamlc", "-i", "%s.cmo" % module_name, "%s_test.ml" % module_name])
-            functions_string = subprocess.check_output(command, shell=True)
-            return functions_string.split("\n")
-        except subprocess.CalledProcessError as cpe:
-            # weird. Should never happen. Can I add a hook to email me / post issue to github?
-            self.terminal.info("Compilation passed but could not echo files. This is #unexpected")
-            return []
 
     def find_modules(self, directory):
         """
@@ -131,12 +123,29 @@ class Harness(object):
                             (val_name, val_type))
                     else:
                         test_cases.append(val_name)
-        return ( (test, self.make_toplevel_input(test_name, test))
-            for test in test_cases )
+        if test_cases == []:
+            return None
+        else:
+            return ( (test, self.make_toplevel_input(test_name, test))
+                for test in test_cases )
 
     def get_options(self, args):
         args = self._collapse_flags(args)
         return dict(zip(args[:2], args[1:2]))
+
+    def get_values(self, module_name):
+        """
+            2013-07-28:
+                Get a list of values defined in '`module_name`.test'
+        """
+        try:
+            command = " ".join(["ocamlc", "-i", "%s.cmo" % module_name, "%s_test.ml" % module_name])
+            functions_string = subprocess.check_output(command, shell=True)
+            return functions_string.split("\n")
+        except subprocess.CalledProcessError as cpe:
+            # weird. Should never happen. Can I add a hook to email me / post issue to github?
+            self.terminal.info("Compilation passed but could not echo files. This is #unexpected")
+            return []
 
     def make_toplevel_input(self, test_name, test):
         """
@@ -148,17 +157,17 @@ class Harness(object):
     def test_module(self, module_name):
         # TODO accept commandline arguments? (which ones?)
         self.terminal.header("Testing %s.ml" % module_name)
-        compilation_succeeded = self.compile(module_name)
-        if not compilation_succeeded:
+        if not self.compile(module_name):
             return False
-        self.terminal.info("Compilation succeeded, generating test scripts...")
-        tester_functions = self.extract_tester_functions(module_name)
-        if tester_functions == []:
-            self.terminal.warn("Found 0 test cases in %s_test.ml" % module_name)
-            return False
+        self.terminal.info("Compilation succeeded! Generating test scripts...")
+        values = self.get_values(module_name)
         all_pass = True
         test_name = "%s_test" % module_name.capitalize()
-        for (fn_name, script) in self.generate_scripts(tester_functions, test_name):
+        test_scripts = self.generate_scripts(values, test_name)
+        if test_scripts is None:
+            self.terminal.warn("No test cases in %s_test.ml" % module_name)
+            return None
+        for (fn_name, script) in test_scripts:
             self.terminal.run("Running %s..." % fn_name)
             test_status = self.run_test(module_name, script)
             all_pass = all_pass and test_status
@@ -224,11 +233,11 @@ class Harness(object):
                 octothorps in the output, and that the text we care about lies between
                 them!
         """
-        message = re.search(r"#(.*)\n#", toplevel_output).group(1)
-        if message == " - : unit = ()":
-            return True, "PASS in %0.3f seconds" % duration
+        message = re.search(r"#(.*)\n#", toplevel_output).group(1).strip()
+        if message == "- : unit = ()":
+            return True, "PASS in %0.3f seconds\n" % duration
         else:
-            return False, "FAIL with '%s' in %0.3f seconds" % (message, duration)
+            return False, "FAIL with '%s' in %0.3f seconds\n" % (message, duration)
 
     def _collapse_flags(self, args):
         new_args = []
