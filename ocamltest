@@ -51,7 +51,7 @@ class Terminal:
 class Harness(object):
 
     terminal = Terminal()
-    version = "0.3"
+    version = "0.4"
 
     def __init__(self, *args):
         # 2013-07-27: Sanitize arguments?
@@ -184,6 +184,7 @@ class Harness(object):
             for path, module_name in self.find_modules(self.options.get("-d", None)):
                 os.chdir(path)
                 module_status = self.test_module(module_name)
+                print("") # separator
                 all_pass = all_pass and module_status
                 # TODO NEED to execute this line.
                 os.chdir(cwd)
@@ -235,9 +236,9 @@ class Harness(object):
         """
         message = re.search(r"#(.*)\n#", toplevel_output).group(1).strip()
         if message == "- : unit = ()":
-            return True, "PASS in %0.3f seconds\n" % duration
+            return True, "PASS in %0.3f seconds" % duration
         else:
-            return False, "FAIL with '%s' in %0.3f seconds\n" % (message, duration)
+            return False, "FAIL with '%s' in %0.3f seconds" % (message, duration)
 
     def _collapse_flags(self, args):
         new_args = []
@@ -278,7 +279,6 @@ class Harness(object):
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
-        Terminal().info("Usage: ocamltest <pattern>")
-    else:
-        h = Harness(*sys.argv)
-        h.run()
+        sys.argv.append("")
+    h = Harness(*sys.argv)
+    h.run()
