@@ -108,6 +108,7 @@ class Harness(object):
 
                 TODO make sure utility functions may be included
         """
+        # TODO not at all optimized to save comparisons
         test_cases = []
         for defined_name in ( x for x in tester_functions if x ):
             if defined_name.startswith("val "):
@@ -130,7 +131,7 @@ class Harness(object):
             2013-07-28:
                 Take necessary information & write something to send to the toplevel.
         """
-        return "module Test = %s;; Test.%s ();;" % (test_name, test)
+        return "%s.%s ();;" % (test_name.capitalize(), test)
 
     def test_module(self, module_name):
         # TODO accept commandline arguments? (which ones?)
@@ -174,17 +175,46 @@ class Harness(object):
         """
             2013-07-28:
                 Execute a single test script.
+                Start a toplevel with the module and test case object files loaded, 
+                pipe in the test script as an argument.
+
+                I'm not entirely happy with the piping because it means that subprocess
+                fails to throw an error when the test fails. Maybe fix that later.
         """
-        # TODO pass a string to `ocaml` instead?
-        with open("/tmp/ocamltest", "w") as f:
-            f.write(script)
+        # TODO add assertions and helpers library object files
+        command = " ".join([
+            "echo \"%s\" |" % script, 
+            "ocaml", "%s.cmo" % module_name,  
+            "%s_test.cmo" % module_name
+        ])
         try:
-            out = subprocess.check_output("ocaml %s.cmo %s_test.cmo /tmp/ocamltest" % (module_name, module_name), shell=True)
-            self.terminal.success("success! %s" % out)
-            return True
+            out = subprocess.check_output(command, shell=True)
         except subprocess.CalledProcessError as cpe:
-            self.terminal.error("fail %s" % cpe)
+            self.terminal.error("failed to run %s_test: %s" % (module_name, cpe))
             return False
+        test_passed, message = self._check_output(out)
+        if test_passed:
+            self.terminal.success(message)
+        else:
+            self.terminal.failure(message)
+        return test_passed
+
+    def _check_output(self, toplevel_output):
+        """
+            2013-08-04:
+                Toplevel output is always echoed to subprocess, regardless of
+                whether the tests passed. Manually check if the code raised an
+                assertion error. 
+                
+                TODO this is not very rigorous! It assumes there will be exactly two
+                octothorps in the output, and that the text we care about lies between
+                them!
+        """
+        message = re.search(r"#(.*)\n#", toplevel_output).group(1)
+        if message == " - : unit = ()":
+            return True, "PASS"
+        else:
+            return False, "FAIL with '%s'" % message
 
     def _collapse_flags(self, args):
         new_args = []
