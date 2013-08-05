@@ -27,7 +27,7 @@ class Terminal:
         print(colored(msg, "red"))
 
     def header(self, msg):
-        print(colored("--- %s ----" % msg, attrs=["bold","reverse"]))
+        print(colored("--- %s ---" % msg, attrs=["bold","reverse"]))
 
     def info(self, msg):
         print(colored(msg, "blue"))
@@ -38,6 +38,14 @@ class Terminal:
         print("* IF YOU WANT TO SUCCEED IN THIS CLASS YOUR CODE MUST COMPILE -mgn29 *")
         print("**********************************************************************")
         time.sleep(0.7)
+
+    def pprint_failures(self, error_messages, duration):
+        self.failure("FAILURE in %0.3f seconds" % duration)
+        for (module_name, errors) in error_messages.iteritems():
+            print(colored("%s_test.ml" % module_name, color="red", attrs=["bold"]))
+            for (fn_name, err_msg) in errors:
+                self.failure("    %s raised \"%s\"" % (fn_name, err_msg))
+        self.failure("\nBETTER LUCK NEXT TIME")
 
     def run(self, msg):
         print(colored(msg, "yellow"))
@@ -113,6 +121,7 @@ class Harness(object):
                 TODO make sure utility functions may be included
         """
         # TODO not at all optimized to save comparisons
+        test_name = test_name.capitalize()
         test_cases = []
         for defined_name in ( x for x in tester_functions if x ):
             if defined_name.startswith("val "):
@@ -156,42 +165,42 @@ class Harness(object):
 
     def test_module(self, module_name):
         # TODO accept commandline arguments? (which ones?)
+        error_messages = []
         self.terminal.header("Testing %s.ml" % module_name)
-        if not self.compile(module_name):
-            return False
-        self.terminal.info("Compilation succeeded! Generating test scripts...")
-        values = self.get_values(module_name)
-        all_pass = True
-        test_name = "%s_test" % module_name.capitalize()
-        test_scripts = self.generate_scripts(values, test_name)
-        if test_scripts is None:
-            self.terminal.warn("No test cases in %s_test.ml" % module_name)
-            return None
-        for (fn_name, script) in test_scripts:
-            self.terminal.run("Running %s..." % fn_name)
-            test_status = self.run_test(module_name, script)
-            all_pass = all_pass and test_status
-        return all_pass
+        if self.compile(module_name):
+            self.terminal.info("Compilation succeeded! Generating test scripts...")
+            values = self.get_values(module_name)
+            test_name = "%s_test" % module_name
+            test_scripts = self.generate_scripts(values, test_name)
+            if test_scripts is None:
+                self.terminal.warn("No test cases in %s_test.ml" % module_name)
+            else:
+                for (fn_name, script) in test_scripts:
+                    self.terminal.run("Running %s..." % fn_name)
+                    err_msg = self.run_test(module_name, script)
+                    if err_msg:
+                        error_messages.append((fn_name, err_msg))
+        return error_messages
 
     def run(self):
         if self.print_version:
             # TODO sync versioning with github?
             self.terminal.info("ocamltest version %s" % self.version)
             return
-        all_pass = True
+        error_messages = {}
         cwd = os.getcwd()
         with Timer() as t:
             for path, module_name in self.find_modules(self.options.get("-d", None)):
                 os.chdir(path)
-                module_status = self.test_module(module_name)
+                errors = self.test_module(module_name)
+                if bool(errors):
+                    error_messages[module_name] = errors
                 print("") # separator
-                all_pass = all_pass and module_status
-                # TODO NEED to execute this line.
                 os.chdir(cwd)
-        if all_pass:
+        if error_messages == {}:
             self.terminal.success("ALL TESTS PASS in %0.3f seconds" % t.duration)
-        else:
-            self.terminal.failure("FAILURE in %0.3f seconds" % t.duration)
+        else: 
+            self.terminal.pprint_failures(error_messages, t.duration)
 
     def run_test(self, module_name, script):
         """
@@ -214,14 +223,15 @@ class Harness(object):
                 out = subprocess.check_output(command, shell=True)
             except subprocess.CalledProcessError as cpe:
                 # TODO what kind of craziness is gonna show up here?
+                # File "_none_", line 1: Error: Reference to undefined global `Setup'
                 self.terminal.error("failed to run %s_test: %s" % (module_name, cpe.output))
                 return False
-        test_passed, message = self._check_output(out, t.duration)
-        if test_passed:
-            self.terminal.success(message)
+        err_msg, duration = self._check_output(out, t.duration)
+        if not err_msg:
+            self.terminal.success("PASS in %0.3f seconds" % duration)
         else:
-            self.terminal.failure(message)
-        return test_passed
+            self.terminal.failure("FAIL with '%s' in %0.3f seconds" % (err_msg, duration))
+        return err_msg
 
     def _check_output(self, toplevel_output, duration):
         """
@@ -236,9 +246,9 @@ class Harness(object):
         """
         message = re.search(r"#(.*)\n#", toplevel_output).group(1).strip()
         if message == "- : unit = ()":
-            return True, "PASS in %0.3f seconds" % duration
+            return None, duration
         else:
-            return False, "FAIL with '%s' in %0.3f seconds" % (message, duration)
+            return message, duration
 
     def _collapse_flags(self, args):
         new_args = []
