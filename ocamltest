@@ -1,7 +1,16 @@
 #!/usr/bin/env python
-import subprocess, sys, re, os
+import subprocess, sys, re, os, time
 
 from termcolor import colored
+
+class Timer:
+    def __enter__(self):
+        self.start = time.time()
+        return self
+
+    def __exit__(self, *args):
+        self.end = time.time()
+        self.duration = self.end - self.start
 
 class Terminal:
     """
@@ -21,6 +30,9 @@ class Terminal:
         print(colored("--- %s ----" % msg, attrs=["bold","reverse"]))
 
     def info(self, msg):
+        print(colored(msg, "magenta"))
+
+    def run(self, msg):
         print(colored(msg, "blue"))
 
     def success(self, msg):
@@ -140,7 +152,6 @@ class Harness(object):
         if not compilation_succeeded:
             return False
         self.terminal.info("Compilation succeeded, generating test scripts...")
-        self.terminal.info("Generating test scripts for %s" % module_name)
         tester_functions = self.extract_tester_functions(module_name)
         if tester_functions == []:
             self.terminal.warn("Found 0 test cases in %s_test.ml" % module_name)
@@ -148,7 +159,7 @@ class Harness(object):
         all_pass = True
         test_name = "%s_test" % module_name.capitalize()
         for (fn_name, script) in self.generate_scripts(tester_functions, test_name):
-            self.terminal.info("Running %s..." % fn_name)
+            self.terminal.run("Running %s..." % fn_name)
             test_status = self.run_test(module_name, script)
             all_pass = all_pass and test_status
         return all_pass
@@ -160,16 +171,17 @@ class Harness(object):
             return
         all_pass = True
         cwd = os.getcwd()
-        for path, module_name in self.find_modules(self.options.get("-d", None)):
-            os.chdir(path)
-            module_status = self.test_module(module_name)
-            all_pass = all_pass and module_status
-            # TODO NEED to execute this line.
-            os.chdir(cwd)
+        with Timer() as t:
+            for path, module_name in self.find_modules(self.options.get("-d", None)):
+                os.chdir(path)
+                module_status = self.test_module(module_name)
+                all_pass = all_pass and module_status
+                # TODO NEED to execute this line.
+                os.chdir(cwd)
         if all_pass:
-            self.terminal.success("ALL TESTS PASS")
+            self.terminal.success("ALL TESTS PASS in %0.3f seconds" % t.duration)
         else:
-            self.terminal.failure("FAILURE")
+            self.terminal.failure("FAILURE in %0.3f seconds" % t.duration)
 
     def run_test(self, module_name, script):
         """
@@ -187,19 +199,21 @@ class Harness(object):
             "ocaml", "%s.cmo" % module_name,  
             "%s_test.cmo" % module_name
         ])
-        try:
-            out = subprocess.check_output(command, shell=True)
-        except subprocess.CalledProcessError as cpe:
-            self.terminal.error("failed to run %s_test: %s" % (module_name, cpe))
-            return False
-        test_passed, message = self._check_output(out)
+        with Timer() as t:
+            try:
+                out = subprocess.check_output(command, shell=True)
+            except subprocess.CalledProcessError as cpe:
+                # TODO what kind of craziness is gonna show up here?
+                self.terminal.error("failed to run %s_test: %s" % (module_name, cpe.output))
+                return False
+        test_passed, message = self._check_output(out, t.duration)
         if test_passed:
             self.terminal.success(message)
         else:
             self.terminal.failure(message)
         return test_passed
 
-    def _check_output(self, toplevel_output):
+    def _check_output(self, toplevel_output, duration):
         """
             2013-08-04:
                 Toplevel output is always echoed to subprocess, regardless of
@@ -212,9 +226,9 @@ class Harness(object):
         """
         message = re.search(r"#(.*)\n#", toplevel_output).group(1)
         if message == " - : unit = ()":
-            return True, "PASS"
+            return True, "PASS in %0.3f seconds" % duration
         else:
-            return False, "FAIL with '%s'" % message
+            return False, "FAIL with '%s' in %0.3f seconds" % (message, duration)
 
     def _collapse_flags(self, args):
         new_args = []
