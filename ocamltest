@@ -44,7 +44,7 @@ class Terminal:
         for (module_name, errors) in error_messages.iteritems():
             print(colored("%s_test.ml" % module_name, color="red", attrs=["bold"]))
             for (fn_name, err_msg) in errors:
-                self.failure("    %s raised \"%s\"" % (fn_name, err_msg))
+                self.failure("> %s - %s" % (fn_name, err_msg))
         self.failure("\nBETTER LUCK NEXT TIME")
 
     def run(self, msg):
