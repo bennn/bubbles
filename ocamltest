@@ -59,6 +59,7 @@ class Main(object):
                     # 2013-08-23: Something went wrong, better record it.
                     test_name = test_file.split("/")[-1][:-(len(".ml"))]
                     error_messages[test_name] = failures
+        self.log.header("Results")
         if bool(error_messages):
             self.log.pprint_failures(error_messages, t.duration)
         else: 
