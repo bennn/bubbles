@@ -159,8 +159,8 @@ class Harness(object):
             "ocaml",
             "ocamltest.cma", # standard testing library
             "%s.cmo" % module_name,  
-            "%s_test.cmo" % module_name]
-        )
+            "%s_test.cmo" % module_name
+        ])
         with Timer() as t:
             try:
                 out = subprocess.check_output(command, shell=True)
@@ -169,7 +169,7 @@ class Harness(object):
                 # File "_none_", line 1: Error: Reference to undefined global `Setup'
                 self.log.error("failed to run %s_test: %s" % (module_name, cpe.output))
                 return False
-        err_msg = self._check_output(out)
+        err_msg = self._error_of_output(out)
         if not err_msg:
             self.log.success("PASS in %0.3f seconds" % t.duration)
         else:
@@ -200,21 +200,6 @@ class Harness(object):
        - Manually compile 'ocamltest.ml', creating a .cma library (`ocamlc -a -o ocamltest.ml`) and then 
          moving 'ocamltest.cma', 'ocamltest.cmo', and 'ocamltest.cmi' to wherever your ocaml standard library files are stored.""")
             exit(1)
-
-    def _check_output(self, toplevel_output):
-        """
-            2013-08-04:
-                Toplevel output is always echoed to subprocess, regardless of
-                whether the tests passed. Manually check if the code raised an
-                assertion error. 
-                
-                TODO this is not very rigorous! It assumes there will be exactly two
-                octothorps in the output, and that the text we care about lies between
-                them!
-        """
-        message = re.search(r"#(.*)\n#", toplevel_output).group(1).strip()
-        if message != "- : unit = ()":
-            return message
 
     def _collapse_flags(self, args):
         """
@@ -247,6 +232,21 @@ class Harness(object):
             return os.environ.get('OCAMLTEST_HOME')
         else:
             return os.getcwd()
+
+    def _error_of_output(self, toplevel_output):
+        """
+            2013-08-04:
+                Toplevel output is always echoed to subprocess, regardless of
+                whether the tests passed. Manually check if the code raised an
+                assertion error. 
+                
+                TODO this is not very rigorous! It assumes there will be exactly two
+                octothorps in the output, and that the text we care about lies between
+                them! This is a reasonable assumption but still it makes me nervous
+        """
+        message = re.search(r"#(.*)\n#", toplevel_output).group(1).strip()
+        if message != "- : unit = ()":
+            return message
 
     def _print_help(self):
         """
