@@ -1,5 +1,5 @@
 install:
-	ocamlc -o ocamltest.cma -a ocamltest.ml
+	ocamlc -g -o ocamltest.cma -a ocamltest.ml
 	echo `ocamlc -where` | xargs cp ocamltest.* 
 
 uninstall:
