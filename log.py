@@ -35,7 +35,7 @@ class Log:
             print(colored("%s_test.ml" % module_name, color="red", attrs=["bold"]))
             for (fn_name, err_msg) in errors:
                 self.failure("> %s - %s" % (fn_name, err_msg))
-        self.failure("\nBETTER LUCK NEXT TIME")
+        self.failure("\n\"START TRAINING\nMAKE A COMEBACK!\"")
 
     def run(self, msg):
         print(colored(msg, "yellow"))
