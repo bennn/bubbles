@@ -100,7 +100,7 @@ class Harness:
             testcase_dir = self.test_file[::-1].split("/", 1)[1][::-1]
             os.chdir(testcase_dir)
         # Compile the test + source files
-        self.log.header("Testing %s.ml" % self.src_name)
+        self.log.header("Testing %s" % self.src_name)
         test_interface = self.compile()
         # Generate the test scripts
         self.log.info("Compilation succeeded! Generating test scripts...")
@@ -140,9 +140,6 @@ class Harness:
         if not err_msg:
             self.log.success("PASS in %0.3f seconds" % t.duration)
         else:
-            # with open("/tmp/shit", "w") as f:
-            #     f.write(err_msg)
-            # print "ERR = '''%s'''" % err_msg
             self.log.failure("FAIL with '%s' in %0.3f seconds" % (err_msg, t.duration))
         return err_msg
 
