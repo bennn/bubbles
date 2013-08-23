@@ -1,65 +1,13 @@
 #!/usr/bin/env python
-import subprocess, sys, re, os, time
+import subprocess, sys, re, os
 
-from termcolor import colored
-
-class Timer:
-    def __enter__(self):
-        self.start = time.time()
-        return self
-
-    def __exit__(self, *args):
-        self.end = time.time()
-        self.duration = self.end - self.start
-
-class Terminal:
-    """
-        2013-07-27:
-            Wrapper for printing color coded messages to the console
-
-            TODO add backgrounds
-    """
-
-    def error(self, msg):
-        print(colored("Error: %s" % msg, "red"))
-
-    def failure(self, msg):
-        print(colored(msg, "red"))
-
-    def header(self, msg):
-        print(colored("--- %s ---" % msg, attrs=["bold","reverse"]))
-
-    def info(self, msg):
-        print(colored(msg, "blue"))
-
-    def nocompile(self, msg):
-        print(colored("Compilation Failed:\n  %s" % msg.strip().replace("\n", "\n  "), color="red"))
-        print("**********************************************************************")
-        print("* IF YOU WANT TO SUCCEED IN THIS CLASS YOUR CODE MUST COMPILE -mgn29 *")
-        print("**********************************************************************")
-        time.sleep(0.7)
-
-    def pprint_failures(self, error_messages, duration):
-        self.failure("FAILURE in %0.3f seconds" % duration)
-        for (module_name, errors) in error_messages.iteritems():
-            print(colored("%s_test.ml" % module_name, color="red", attrs=["bold"]))
-            for (fn_name, err_msg) in errors:
-                self.failure("> %s - %s" % (fn_name, err_msg))
-        self.failure("\nBETTER LUCK NEXT TIME")
-
-    def run(self, msg):
-        print(colored(msg, "yellow"))
-
-    def success(self, msg):
-        print(colored(msg, "green"))
-
-    def warn(self, msg):
-        print(colored("Warning: %s" % msg, "magenta"))
+from timer import Timer
+from log import Log
 
 class Harness(object):
 
-    terminal = Terminal()
-    version = "0.4"
+    log = Log()
+    version = "0.5"
 
     def __init__(self, *args):
         # 2013-07-27: Sanitize arguments?
@@ -67,31 +15,31 @@ class Harness(object):
         # TODO this is not very error-tolerant
         self.options = self.get_options(args[1:-1])
         self.print_version = ("-v" in self.options) or ("--version" in self.options)
+        self.ocamltest_home = os.environ.get('OCAMLTEST_HOME')
+        if self.ocamltest_home is None:
+            self.log.error("Environment variable OCAMLTEST_HOME is not set")
+            # TODO clarify this message tremendously
+            exit(1)
 
-    def compile(self, module_name, libs):
+    def compile(self, module_name):
         """
             2013-07-28:
                 Compile module + corresponding test case
-
-                TODO handle errors a little cleaner? I worry about the number
-                     of if/else branches in the code. Monadize?
-                TODO test error handling
         """
         ml_file = "%s.ml" % module_name
         test_file = "%s_test.ml" % module_name
-        # TODO this is UGLY
-        libs2 = []
-        for l in libs:
-            subprocess.check_output("cp %s ." % l, shell=True)
-            libs2.append(l.split("/")[-1])
-        self.terminal.info("Compiling %s and %s" % (ml_file, test_file))
+        self.log.info("Compiling %s and %s" % (ml_file, test_file))
         try:
-            command = " ".join(["ocamlc"] + libs2 + [ml_file, test_file])
-            subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
-            return True
+            base_command = "ocamlc ocamltest.cma"
+            # Compile the the file + test case
+            full_compilation = "%s %s %s" % (base_command, ml_file, test_file)
+            subprocess.check_output(full_compilation, shell=True, stderr=subprocess.STDOUT)
+            # Success? Then extract the interface from the test file
+            infer_interface = "%s -i %s.cmo %s" % (base_command, ml_file, test_file)
+            return subprocess.check_output(infer_interface, shell=True).split("\n")
         except subprocess.CalledProcessError as cpe:
-            self.terminal.nocompile(cpe.output)
-            return False
+            self.log.nocompile(cpe.output)
+            return None
 
     def find_modules(self, directory):
         """
@@ -101,42 +49,36 @@ class Harness(object):
         """
         directory = self._directory_fallback(directory)
         command = " ".join(["find", directory, "-name", "'*%s*_test.ml'" % self.pattern])
-        matches = subprocess.check_output(command, shell=True)
+        matchesStr = subprocess.check_output(command, shell=True)
+        matches = (m for m in matchesStr.split("\n") if m)
         # Matches look like "myfile_test.ml". Filename = the "myfile" part.
         #     also return the path to the file
-        for path_to_module in matches.split("\n"):
-            # Filter empties
-            if path_to_module:
-                # Find the last /. This is where the path ends and the module starts
-                splitIndex = 0 - (path_to_module[::-1].find("/"))
-                path = path_to_module[:splitIndex]
-                # Cut off the ".ml" suffix.
-                module_name = path_to_module[splitIndex:-8]
-                yield (path, module_name)
+        for path_to_module in matches:
+            # Find the last /. This is where the path ends and the module starts
+            splitIndex = 0 - (path_to_module[::-1].find("/"))
+            path = path_to_module[:splitIndex]
+            # Cut off the suffix.
+            module_name = path_to_module[splitIndex:-(len("_test.ml"))]
+            yield (path, module_name)
 
     def generate_scripts(self, tester_functions, test_name):
         """
             2013-07-23:
-                Given a list of defined names (result of compiling the test case),
-                prepare unit test scripts to be run in the toplevel environment.
+                [generate_scripts fns name] iterates through callable values [fns]
+                and picks out the `unit -> unit` test cases.
 
                 Ignore and throw warnings for test cases that
                 do not have type `unit -> unit`
-
-                TODO make sure utility functions may be included
         """
-        # TODO not at all optimized to save comparisons
         test_name = test_name.capitalize()
         test_cases = []
-        for defined_name in ( x for x in tester_functions if x ):
-            if defined_name.startswith("val "):
-                val_name, val_type = defined_name[4:].split(" : ", 1)
-                if val_name.startswith("test_"):
-                    if val_type != "unit -> unit":
-                        self.terminal.warn("skipping test case %s with type %s" % \
-                            (val_name, val_type))
-                    else:
-                        test_cases.append(val_name)
+        for defined_name in ( x for x in tester_functions if x.startswith("val ") ):
+            val_name, val_type = defined_name[4:].split(" : ", 1)
+            if val_name.startswith("test_"):
+                if val_type != "unit -> unit":
+                    self.log.warn("skipping test case %s with type %s" % (val_name, val_type))
+                else:
+                    test_cases.append(val_name)
         if test_cases == []:
             return None
         else:
@@ -147,20 +89,6 @@ class Harness(object):
         args = self._collapse_flags(args)
         return dict(zip(args[:2], args[1:2]))
 
-    def get_values(self, module_name):
-        """
-            2013-07-28:
-                Get a list of values defined in '`module_name`.test'
-        """
-        try:
-            command = " ".join(["ocamlc", "-i", "%s.cmo" % module_name, "%s_test.ml" % module_name])
-            functions_string = subprocess.check_output(command, shell=True)
-            return functions_string.split("\n")
-        except subprocess.CalledProcessError as cpe:
-            # weird. Should never happen. Can I add a hook to email me / post issue to github?
-            self.terminal.info("Compilation passed but could not echo files. This is #unexpected")
-            return []
-
     def make_toplevel_input(self, test_name, test):
         """
             2013-07-28:
@@ -168,21 +96,22 @@ class Harness(object):
         """
         return "%s.%s ();;" % (test_name.capitalize(), test)
 
-    def test_module(self, module_name, libs):
+    def test_module(self, module_name):
+        # TODO run this as its own process
         # TODO accept commandline arguments? (which ones?)
         error_messages = []
-        self.terminal.header("Testing %s.ml" % module_name)
-        if self.compile(module_name, libs):
-            self.terminal.info("Compilation succeeded! Generating test scripts...")
-            values = self.get_values(module_name)
+        self.log.header("Testing %s.ml" % module_name)
+        values = self.compile(module_name)
+        if values is not None:
+            self.log.info("Compilation succeeded! Generating test scripts...")
             test_name = "%s_test" % module_name
             test_scripts = self.generate_scripts(values, test_name)
             if test_scripts is None:
-                self.terminal.warn("No test cases in %s_test.ml" % module_name)
+                self.log.warn("No test cases in %s_test.ml" % module_name)
             else:
                 for (fn_name, script) in test_scripts:
-                    self.terminal.run("Running %s..." % fn_name)
-                    err_msg = self.run_test(module_name, script, libs)
+                    self.log.run("Running %s..." % fn_name)
+                    err_msg = self.run_test(module_name, script)
                     if err_msg:
                         error_messages.append((fn_name, err_msg))
         return error_messages
@@ -190,24 +119,30 @@ class Harness(object):
     def run(self):
         if self.print_version:
             # TODO sync versioning with github?
-            self.terminal.info("ocamltest version %s" % self.version)
+            self.log.info("ocamltest version %s" % self.version)
             return
         cwd = os.getcwd()
         error_messages = {}
-        libs = self._compile_library(cwd)
+        to_run = list(self.find_modules(self.options.get("-d", cwd)))
+        if not bool(to_run):
+            # No tests, terminate early
+            self.log.warn("Found 0 tests matching pattern")
+            return
+        # We have tests! Run them
         with Timer() as t:
-            for path, module_name in self.find_modules(self.options.get("-d", None)):
+            for path, module_name in to_run:
                 os.chdir(path)
-                errors = self.test_module(module_name, libs)
+                # TODO run tests in subprocesses
+                errors = self.test_module(module_name)
                 if bool(errors):
                     error_messages[module_name] = errors
                 print("") # separator
         if error_messages == {}:
-            self.terminal.success("ALL TESTS PASS in %0.3f seconds" % t.duration)
+            self.log.success("ALL TESTS PASS in %0.3f seconds" % t.duration)
         else: 
-            self.terminal.pprint_failures(error_messages, t.duration)
+            self.log.pprint_failures(error_messages, t.duration)
 
-    def run_test(self, module_name, script, libs):
+    def run_test(self, module_name, script):
         """
             2013-07-28:
                 Execute a single test script.
@@ -216,31 +151,33 @@ class Harness(object):
 
                 I'm not entirely happy with the piping because it means that subprocess
                 fails to throw an error when the test fails. Maybe fix that later.
+                
+                TODO show full traceback
+                TODO use ocamlrun
         """
-        # TODO add assertions and helpers library object files
         command = " ".join([
-            "echo \"%s\" |" % script, 
-            "ocaml", libs[0].split("/")[-1][:-3] + ".cmo",
+            "echo \"%s\" |" % script,
+            "ocaml",
+            "ocamltest.cma", # standard testing library
             "%s.cmo" % module_name,  
             "%s_test.cmo" % module_name]
         )
-        print "caommed = %s" % command
         with Timer() as t:
             try:
                 out = subprocess.check_output(command, shell=True)
             except subprocess.CalledProcessError as cpe:
                 # TODO what kind of craziness is gonna show up here?
                 # File "_none_", line 1: Error: Reference to undefined global `Setup'
-                self.terminal.error("failed to run %s_test: %s" % (module_name, cpe.output))
+                self.log.error("failed to run %s_test: %s" % (module_name, cpe.output))
                 return False
-        err_msg, duration = self._check_output(out, t.duration)
+        err_msg = self._check_output(out)
         if not err_msg:
-            self.terminal.success("PASS in %0.3f seconds" % duration)
+            self.log.success("PASS in %0.3f seconds" % t.duration)
         else:
-            self.terminal.failure("FAIL with '%s' in %0.3f seconds" % (err_msg, duration))
+            self.log.failure("FAIL with '%s' in %0.3f seconds" % (err_msg, t.duration))
         return err_msg
 
-    def _check_output(self, toplevel_output, duration):
+    def _check_output(self, toplevel_output):
         """
             2013-08-04:
                 Toplevel output is always echoed to subprocess, regardless of
@@ -252,12 +189,15 @@ class Harness(object):
                 them!
         """
         message = re.search(r"#(.*)\n#", toplevel_output).group(1).strip()
-        if message == "- : unit = ()":
-            return None, duration
-        else:
-            return message, duration
+        if message != "- : unit = ()":
+            return message
 
     def _collapse_flags(self, args):
+        """
+            2013-08-22:
+                Change all long flags to short flags. For example:
+                    --version => -v
+        """
         new_args = []
         for arg in args:
             if arg.startswith("--"):
@@ -266,30 +206,6 @@ class Harness(object):
                 new_args.append(arg)
         return new_args
 
-    def _compile_library(self, cwd):
-        """
-            2013-08-05:
-                Ensure that library functions are compiled.
-                Look in OCAMLTEST_HOME for the unittest library.
-                Maybe there will be other stuff here later
-
-                TODO These aren't changing often, so maybe skip this step if the
-                .cmo files already exist
-        """
-        libs = []
-        ocamltest_home = os.environ.get('OCAMLTEST_HOME')
-        if ocamltest_home:
-            os.chdir(ocamltest_home)
-            if os.path.exists("ocamltest.ml"):
-                try:
-                    # subprocess.check_output("ocamlc ocamltest.ml", shell=True, stderr=subprocess.STDOUT)
-                    libs.append("%s/ocamltest.ml" % ocamltest_home)
-                except subprocess.CalledProcessError:
-                    pass
-            os.chdir(cwd)
-        return libs
-            
-
     def _directory_fallback(self, directory):
         """
             2013-07-28:
@@ -297,13 +213,14 @@ class Harness(object):
                 A: the part the user specified with an option,
                    the part set in an environment variable,
                    or the current working directory
+
+                TODO I'm thinking we should search cwd for matches, and 
+                     failing that search the ocamltest home
         """
         if directory:
             return directory
-        elif os.environ.get('OCAMLTEST_HOME'):
-            return os.environ['OCAMLTEST_HOME']
         else:
-            return os.getcwd()
+            return self.ocamltest_home
 
     def _print_help(self):
         """
@@ -320,6 +237,7 @@ class Harness(object):
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
+        # TODO the fuck is this hack?
         sys.argv.append("")
     h = Harness(*sys.argv)
     h.run()
