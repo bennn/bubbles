@@ -15,11 +15,6 @@ class Harness(object):
         # TODO this is not very error-tolerant
         self.options = self.get_options(args[1:-1])
         self.print_version = ("-v" in self.options) or ("--version" in self.options)
-        self.ocamltest_home = os.environ.get('OCAMLTEST_HOME')
-        if self.ocamltest_home is None:
-            self.log.error("Environment variable OCAMLTEST_HOME is not set")
-            # TODO clarify this message tremendously
-            exit(1)
 
     def compile(self, module_name):
         """
@@ -121,6 +116,7 @@ class Harness(object):
             # TODO sync versioning with github?
             self.log.info("ocamltest version %s" % self.version)
             return
+        self._check_install()
         cwd = os.getcwd()
         error_messages = {}
         to_run = list(self.find_modules(self.options.get("-d", cwd)))
@@ -177,6 +173,31 @@ class Harness(object):
             self.log.failure("FAIL with '%s' in %0.3f seconds" % (err_msg, t.duration))
         return err_msg
 
+    def _check_install(self):
+        """
+            2013-08-22:
+                Ensure that everything's installed properly, give descriptive
+                warnings if it is not.
+
+                Requirements:
+                - OCAMLTEST_HOME env. variable is set. I don't care where it points,
+                    but it's supposed to point to the project root, where you want
+                    to test from by default
+                - ocamltest.ml is installed wherever ocamlc expects to find it
+        """
+        if not os.environ.get('OCAMLTEST_HOME'):
+            self.log.warn("""Environment variable 'OCAMLTEST_HOME' not found. 
+         Set it to your project root via the shell command `export OCAMLTEST_HOME=<path-to-your-project>`.""")
+        ocamltest_files = ['ocamltest.cma', 'ocamltest.cmi', 'ocamltest.cmo']
+        find_files = ( subprocess.check_output("find `ocamlc -where` -name '%s'" % fname, shell=True)
+            for fname in ocamltest_files )
+        if not (len(ocamltest_files) == len([x for x in find_files if x])):
+            self.log.error("""ocamltest.ml not properly installed. You may either:
+       - Run `make install` with root permissions
+       - Manually compile 'ocamltest.ml', creating a .cma library (`ocamlc -a -o ocamltest.ml`) and then 
+         moving 'ocamltest.cma', 'ocamltest.cmo', and 'ocamltest.cmi' to wherever your ocaml standard library files are stored.""")
+            exit(1)
+
     def _check_output(self, toplevel_output):
         """
             2013-08-04:
@@ -219,8 +240,10 @@ class Harness(object):
         """
         if directory:
             return directory
+        elif os.environ.get('OCAMLTEST_HOME'):
+            return os.environ.get('OCAMLTEST_HOME')
         else:
-            return self.ocamltest_home
+            return os.getcwd()
 
     def _print_help(self):
         """
