@@ -1,173 +1,68 @@
 #!/usr/bin/env python
 import subprocess, sys, re, os
 
-from timer import Timer
+from harness import Harness
 from log import Log
+from timer import Timer
 
-class Harness(object):
+class Main(object):
 
-    log = Log()
     version = "0.5"
 
     def __init__(self, *args):
+        self.log = Log()
+
         # TODO this is not very error-tolerant
         self.options = self.get_options(args[1:-1])
         self.print_version = ("-v" in self.options) or ("--version" in self.options)
 
-    def compile(self, module_name):
-        """
-            2013-07-28:
-                Compile module + corresponding test case
-        """
-        ml_file = "%s.ml" % module_name
-        test_file = "%s_test.ml" % module_name
-        self.log.info("Compiling %s and %s" % (ml_file, test_file))
-        try:
-            base_command = "ocamlc ocamltest.cma"
-            # Compile the the file + test case
-            full_compilation = "%s -g %s %s" % (base_command, ml_file, test_file)
-            subprocess.check_output(full_compilation, shell=True, stderr=subprocess.STDOUT)
-            # Success? Then extract the interface from the test file
-            infer_interface = "%s -i %s.cmo %s" % (base_command, ml_file, test_file)
-            return subprocess.check_output(infer_interface, shell=True).split("\n")
-        except subprocess.CalledProcessError as cpe:
-            errMsg = cpe.output.strip()
-            # 2013-08-23: Retrieve failing line from the file
-            sourceError = self._source_of_exception(errMsg)
-            self.log.nocompile(("%s\n%s" % (errMsg, sourceError)).replace("\n", "\n  "))
-            return None
-
     def find_modules(self, pattern, directory):
         """
             2013-07-28:
-                Search the filesystem (`directory` on down)
-                modules matching the pattern given in the command line args
-                TODO hahh
+                Search the filesystem (`directory` on down) for
+                modules matching `pattern`
         """
         directory = self._directory_fallback(directory)
-        command = " ".join(["find", directory, "-name", "'*%s*.ml'" % pattern])
-        matchesStr = subprocess.check_output(command, shell=True)
+        find_command = " ".join(["find", directory, "-name", "'*%s*.ml'" % pattern])
+        matchesStr = subprocess.check_output(find_command, shell=True)
         # 2013-08-23: We're only concerned with test files. `xxx_test.ml`
-        matches = (m for m in matchesStr.split("\n") if m.endswith("_test.ml"))
-        # Matches look like "myfile_test.ml". Filename = the "myfile" part.
-        #     also return the path to the file
-        for path_to_module in matches:
-            # Find the last /. This is where the path ends and the module starts
-            splitIndex = 0 - (path_to_module[::-1].find("/"))
-            path = path_to_module[:splitIndex]
-            # Cut off the suffix.
-            module_name = path_to_module[splitIndex:-(len("_test.ml"))]
-            yield (path, module_name)
-
-    def generate_scripts(self, tester_functions, test_name):
-        """
-            2013-07-23:
-                [generate_scripts fns name] iterates through callable values [fns]
-                and picks out the `unit -> unit` test cases.
-
-                Ignore and throw warnings for test cases that
-                do not have type `unit -> unit`
-        """
-        test_name = test_name.capitalize()
-        test_cases = []
-        for defined_name in ( x for x in tester_functions if x.startswith("val ") ):
-            val_name, val_type = defined_name[4:].split(" : ", 1)
-            if val_name.startswith("test_"):
-                if val_type != "unit -> unit":
-                    self.log.warn("skipping test case %s with type %s" % (val_name, val_type))
-                else:
-                    test_cases.append(val_name)
-        if test_cases == []:
-            return None
-        else:
-            return ( (test, self._toplevel_input(test_name, test))
-                for test in test_cases )
+        return (m for m in matchesStr.split("\n") if m.endswith("_test.ml"))
 
     def get_options(self, args):
         args = self._collapse_flags(args)
         return dict(zip(args[:2], args[1:2]))
 
-    def test_module(self, module_name):
-        # TODO run this as its own process
-        # TODO accept commandline arguments? (which ones?)
-        error_messages = []
-        self.log.header("Testing %s.ml" % module_name)
-        values = self.compile(module_name)
-        if values is not None:
-            self.log.info("Compilation succeeded! Generating test scripts...")
-            test_name = "%s_test" % module_name
-            test_scripts = self.generate_scripts(values, test_name)
-            if test_scripts is None:
-                self.log.warn("No test cases in %s_test.ml" % module_name)
-            else:
-                for (fn_name, script) in test_scripts:
-                    self.log.run("Running %s..." % fn_name)
-                    err_msg = self.run_test(module_name, script)
-                    if err_msg:
-                        error_messages.append((fn_name, err_msg))
-        return error_messages
-
     def run(self, pattern):
+        """
+            2013-08-23:
+                Handle control flow, find the test files to be run,
+                run a harness for each test file
+        """
         if self.print_version:
             # TODO sync versioning with github?
             self.log.info("ocamltest version %s" % self.version)
             return
+        # Make sure everything's installed well enough
         self._check_install()
-        cwd = os.getcwd()
-        error_messages = {}
-        to_run = list(self.find_modules(pattern, self.options.get("-d", cwd)))
+        # Find test files
+        to_run = list(self.find_modules(pattern, self.options.get("-d", None)))
         if not bool(to_run):
             # No tests, terminate early
             self.log.warn("Found 0 tests matching pattern")
             return
-        # We have tests! Run them
+        # We have tests! Start a timer and run them.
+        error_messages = {}
         with Timer() as t:
-            for path, module_name in to_run:
-                os.chdir(path)
-                # TODO run tests in subprocesses
-                errors = self.test_module(module_name)
-                if bool(errors):
-                    error_messages[module_name] = errors
-                print("") # separator
-        if error_messages == {}:
-            self.log.success("ALL TESTS PASS in %0.3f seconds" % t.duration)
-        else: 
+            for test_file in to_run:
+                failures = Harness(test_file).failures
+                if bool(failures):
+                    # 2013-08-23: Something went wrong, better record it.
+                    test_name = test_file.split("/")[-1][:-(len(".ml"))]
+                    error_messages[test_name] = failures
+        if bool(error_messages):
             self.log.pprint_failures(error_messages, t.duration)
-
-    def run_test(self, module_name, script):
-        """
-            2013-07-28:
-                Execute a single test script.
-                Start a toplevel with the module and test case object files loaded, 
-                pipe in the test script as an argument.
-
-                I'm not entirely happy with the piping because it means that subprocess
-                fails to throw an error when the test fails. Maybe fix that later.
-                
-                TODO show full traceback
-                TODO use ocamlrun
-        """
-        command = " ".join([
-            "echo \"%s\" |" % script,
-            "ocaml",
-            "ocamltest.cma", # standard testing library
-            "%s.cmo" % module_name,  
-            "%s_test.cmo" % module_name
-        ])
-        with Timer() as t:
-            try:
-                out = subprocess.check_output(command, shell=True)
-            except subprocess.CalledProcessError as cpe:
-                # TODO what kind of craziness is gonna show up here?
-                # File "_none_", line 1: Error: Reference to undefined global `Setup'
-                self.log.error("failed to run %s_test: %s" % (module_name, cpe.output))
-                return False
-        err_msg = self._error_of_output(out)
-        if not err_msg:
-            self.log.success("PASS in %0.3f seconds" % t.duration)
-        else:
-            self.log.failure("FAIL with '%s' in %0.3f seconds" % (err_msg, t.duration))
-        return err_msg
+        else: 
+            self.log.success("ALL TESTS PASS in %0.3f seconds" % t.duration)
 
     def _check_install(self):
         """
@@ -223,21 +118,6 @@ class Harness(object):
         else:
             return os.getcwd()
 
-    def _error_of_output(self, toplevel_output):
-        """
-            2013-08-04:
-                Toplevel output is always echoed to subprocess, regardless of
-                whether the tests passed. Manually check if the code raised an
-                assertion error. 
-                
-                TODO this is not very rigorous! It assumes there will be exactly two
-                octothorps in the output, and that the text we care about lies between
-                them! This is a reasonable assumption but still it makes me nervous
-        """
-        message = re.search(r"#(.*)\n#", toplevel_output).group(1).strip()
-        if message != "- : unit = ()":
-            return message
-
     def _print_help(self):
         """
             2013-07-28:
@@ -251,36 +131,9 @@ class Harness(object):
         ]
         return "\n".join(hs)
 
-    def _source_of_exception(self, errorMessage):
-        """
-            2013-08-23:
-                Get the line number and source file that spawned [errorMessage],
-                extract that line of code from that source file
-        """
-        match = re.search(r"File \"(.*?)\", line ([0-9]+),", errorMessage)
-        if match is None:
-            return ""
-        else:
-            fname = match.group(1)
-            lineNo = int(match.group(2))
-            with open(fname, "r") as f:
-                currentLine = 1
-                while currentLine < lineNo:
-                    currentLine += 1
-                    next(f)
-                return "---> %s" % (next(f).strip())
-
-    def _toplevel_input(self, module_name, test):
-        """
-            2013-07-28:
-                 Write a script for the toplevel. Call the right function
-                 from the right module
-        """
-        return "%s.%s ();;" % (module_name.capitalize(), test)
-
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         # 2013-08-23: No arguments = run all tests
         sys.argv.append("")
-    h = Harness(*sys.argv)
+    h = Main(*sys.argv)
     h.run(sys.argv[-1])
