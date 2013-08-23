@@ -27,13 +27,16 @@ class Harness(object):
         try:
             base_command = "ocamlc ocamltest.cma"
             # Compile the the file + test case
-            full_compilation = "%s %s %s" % (base_command, ml_file, test_file)
+            full_compilation = "%s -g %s %s" % (base_command, ml_file, test_file)
             subprocess.check_output(full_compilation, shell=True, stderr=subprocess.STDOUT)
             # Success? Then extract the interface from the test file
             infer_interface = "%s -i %s.cmo %s" % (base_command, ml_file, test_file)
             return subprocess.check_output(infer_interface, shell=True).split("\n")
         except subprocess.CalledProcessError as cpe:
-            self.log.nocompile(cpe.output)
+            errMsg = cpe.output.strip()
+            # 2013-08-23: Retrieve failing line from the file
+            sourceError = self._source_of_exception(errMsg)
+            self.log.nocompile(("%s\n%s" % (errMsg, sourceError)).replace("\n", "\n  "))
             return None
 
     def find_modules(self, directory):
@@ -257,6 +260,25 @@ class Harness(object):
             "-v --version : echo version number, then quit",
         ]
         return "\n".join(hs)
+
+    def _source_of_exception(self, errorMessage):
+        """
+            2013-08-23:
+                Get the line number and source file that spawned [errorMessage],
+                extract that line of code from that source file
+        """
+        match = re.search(r"File \"(.*?)\", line ([0-9]+),", errorMessage)
+        if match is None:
+            return ""
+        else:
+            fname = match.group(1)
+            lineNo = int(match.group(2))
+            with open(fname, "r") as f:
+                currentLine = 1
+                while currentLine < lineNo:
+                    currentLine += 1
+                    next(f)
+                return "---> %s" % (next(f).strip())
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:

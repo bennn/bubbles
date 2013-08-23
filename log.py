@@ -23,7 +23,7 @@ class Log:
         print(colored(msg, "blue"))
 
     def nocompile(self, msg):
-        print(colored("Compilation Failed:\n  %s" % msg.strip().replace("\n", "\n  "), color="red"))
+        print(colored("Compilation Failed:\n  %s" % msg, color="red"))
         print("**********************************************************************")
         print("* IF YOU WANT TO SUCCEED IN THIS CLASS YOUR CODE MUST COMPILE -mgn29 *")
         print("**********************************************************************")
