@@ -80,19 +80,12 @@ class Harness(object):
         if test_cases == []:
             return None
         else:
-            return ( (test, self.make_toplevel_input(test_name, test))
+            return ( (test, self._toplevel_input(test_name, test))
                 for test in test_cases )
 
     def get_options(self, args):
         args = self._collapse_flags(args)
         return dict(zip(args[:2], args[1:2]))
-
-    def make_toplevel_input(self, test_name, test):
-        """
-            2013-07-28:
-                Take necessary information & write something to send to the toplevel.
-        """
-        return "%s.%s ();;" % (test_name.capitalize(), test)
 
     def test_module(self, module_name):
         # TODO run this as its own process
@@ -222,9 +215,6 @@ class Harness(object):
                 A: the part the user specified with an option,
                    the part set in an environment variable,
                    or the current working directory
-
-                TODO I'm thinking we should search cwd for matches, and 
-                     failing that search the ocamltest home
         """
         if directory:
             return directory
@@ -279,6 +269,14 @@ class Harness(object):
                     currentLine += 1
                     next(f)
                 return "---> %s" % (next(f).strip())
+
+    def _toplevel_input(self, module_name, test):
+        """
+            2013-07-28:
+                 Write a script for the toplevel. Call the right function
+                 from the right module
+        """
+        return "%s.%s ();;" % (module_name.capitalize(), test)
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
