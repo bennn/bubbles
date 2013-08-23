@@ -10,8 +10,6 @@ class Harness(object):
     version = "0.5"
 
     def __init__(self, *args):
-        # 2013-07-27: Sanitize arguments?
-        self.pattern = args[-1]
         # TODO this is not very error-tolerant
         self.options = self.get_options(args[1:-1])
         self.print_version = ("-v" in self.options) or ("--version" in self.options)
@@ -39,16 +37,18 @@ class Harness(object):
             self.log.nocompile(("%s\n%s" % (errMsg, sourceError)).replace("\n", "\n  "))
             return None
 
-    def find_modules(self, directory):
+    def find_modules(self, pattern, directory):
         """
             2013-07-28:
                 Search the filesystem (`directory` on down)
                 modules matching the pattern given in the command line args
+                TODO hahh
         """
         directory = self._directory_fallback(directory)
-        command = " ".join(["find", directory, "-name", "'*%s*_test.ml'" % self.pattern])
+        command = " ".join(["find", directory, "-name", "'*%s*.ml'" % pattern])
         matchesStr = subprocess.check_output(command, shell=True)
-        matches = (m for m in matchesStr.split("\n") if m)
+        # 2013-08-23: We're only concerned with test files. `xxx_test.ml`
+        matches = (m for m in matchesStr.split("\n") if m.endswith("_test.ml"))
         # Matches look like "myfile_test.ml". Filename = the "myfile" part.
         #     also return the path to the file
         for path_to_module in matches:
@@ -107,7 +107,7 @@ class Harness(object):
                         error_messages.append((fn_name, err_msg))
         return error_messages
 
-    def run(self):
+    def run(self, pattern):
         if self.print_version:
             # TODO sync versioning with github?
             self.log.info("ocamltest version %s" % self.version)
@@ -115,7 +115,7 @@ class Harness(object):
         self._check_install()
         cwd = os.getcwd()
         error_messages = {}
-        to_run = list(self.find_modules(self.options.get("-d", cwd)))
+        to_run = list(self.find_modules(pattern, self.options.get("-d", cwd)))
         if not bool(to_run):
             # No tests, terminate early
             self.log.warn("Found 0 tests matching pattern")
@@ -280,7 +280,7 @@ class Harness(object):
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
-        # TODO the fuck is this hack?
+        # 2013-08-23: No arguments = run all tests
         sys.argv.append("")
     h = Harness(*sys.argv)
-    h.run()
+    h.run(sys.argv[-1])
