@@ -59,7 +59,7 @@ class Harness:
             # Replace vanilla newlines with indented newlines.
             nocompile_msg = ("%s\n%s" % (err_msg, sourceError)).replace("\n", "\n  ")
             self.log.nocompile(nocompile_msg)
-            return None
+            exit(1)
 
     def generate_scripts(self, test_interface):
         """
