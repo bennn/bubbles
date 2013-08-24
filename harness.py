@@ -57,7 +57,7 @@ class Harness:
             sourceError = self._source_of_exception(err_msg)
             # Put the OCaml exception + line from source into one string. 
             # Replace vanilla newlines with indented newlines.
-            nocompile_msg = ("%s\n%s" % (errMsg, sourceError)).replace("\n", "\n  ")
+            nocompile_msg = ("%s\n%s" % (err_msg, sourceError)).replace("\n", "\n  ")
             self.log.nocompile(nocompile_msg)
             return None
 
