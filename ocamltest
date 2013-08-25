@@ -8,15 +8,15 @@ from util.timer import Timer
 
 class Main(object):
 
+    DEFAULT_TIMEOUT = 20
     version = "0.7"
 
     def __init__(self, *args):
         self.log = Log()
 
         # TODO this is not very error-tolerant
-        self.options = self.get_options(args[1:-1])
+        self.options = self._options(args[1:-1])
         self.print_version = ("-v" in self.options)
-        self.timeout = self.options.get("-t", 20)
 
     def find_modules(self, pattern, directory):
         """
@@ -33,10 +33,6 @@ class Main(object):
         except subprocess.CalledProcessError as cpe:
             self.log.error("%s  Make certain environment variable OCAMLTEST_HOME is set to a valid folder on your file system." % cpe.output)
             exit(1)
-
-    def get_options(self, args):
-        args = self._collapse_flags(args)
-        return dict(zip(args[:2], args[1:2]))
 
     def run(self, pattern):
         """
@@ -61,7 +57,7 @@ class Main(object):
         with Timer() as t:
             for test_file in to_run:
                 try: 
-                    failures = Harness(test_file, self.timeout).failures
+                    failures = Harness(test_file, self._timeout()).failures
                     if bool(failures):
                         # 2013-08-23: Something went wrong, better record it.
                         test_name = test_file.split("/")[-1][:-(len(".ml"))]
@@ -129,18 +125,42 @@ class Main(object):
         else:
             return os.getcwd()
 
+    def _options(self, args):
+        args = self._collapse_flags(args)
+        return dict(zip(args[:2], args[1:2]))
+
     def _print_help(self):
         """
             2013-07-28:
                 Documentation stub.
         """
         hs = [
+            "Usage: ocamltest [options] [pattern]",
+            "  searches for files ending with '_test.ml' which match the given pattern, or all tests from $OCAMLTEST_HOME on down if no pattern is given",
             "Supported options:",
             "-d --directory : use this directory as the base for the suite", #2013-07-28: TODO explain this better
             "-h --help : print this message",
+            "-t --timeout : set the time limit (in seconds) for tests. Default is %s seconds" % self.DEFAULT_TIMEOUT,
             "-v --version : echo version number, then quit",
         ]
         return "\n".join(hs)
+
+    def _timeout(self):
+        """
+            2013-08-25:
+                Get the timeout, if supplied and valid. 
+                Raise an exception for an invalid timeout, return the default
+                timeout otherwise.
+        """
+        if "-t" not in self.options:
+            return self.DEFAULT_TIMEOUT
+        else:
+            timeoutStr = self.options['-t']
+            try: 
+                return int(timeoutStr)
+            except TypeError:
+                self.log.error("Expected integer-valued timeout, received %s" % timeoutStr)
+                exit(1)
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
