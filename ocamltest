@@ -2,20 +2,21 @@
 import subprocess, sys, re, os
 
 from util.harness import Harness
-from util.invalidTest import InvalidTest
+from util.invalidTestException import InvalidTestException
 from util.log import Log
 from util.timer import Timer
 
 class Main(object):
 
-    version = "0.6"
+    version = "0.7"
 
     def __init__(self, *args):
         self.log = Log()
 
         # TODO this is not very error-tolerant
         self.options = self.get_options(args[1:-1])
-        self.print_version = ("-v" in self.options) or ("--version" in self.options)
+        self.print_version = ("-v" in self.options)
+        self.timeout = self.options.get("-t", 20)
 
     def find_modules(self, pattern, directory):
         """
@@ -60,12 +61,12 @@ class Main(object):
         with Timer() as t:
             for test_file in to_run:
                 try: 
-                    failures = Harness(test_file).failures
+                    failures = Harness(test_file, self.timeout).failures
                     if bool(failures):
                         # 2013-08-23: Something went wrong, better record it.
                         test_name = test_file.split("/")[-1][:-(len(".ml"))]
                         error_messages[test_name] = failures
-                except InvalidTest as e:
+                except InvalidTestException as e:
                     # Optionally do something based on status code
                     pass
         self.log.header("Results")

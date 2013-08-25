@@ -1,8 +1,10 @@
 import os, re, subprocess
 
-from util.invalidTest import InvalidTest
-from util.log import Log
-from util.timer import Timer
+from invalidTestException import InvalidTestException
+from log import Log
+from timer import Timer
+from timedProcess import TimedProcess
+from timeoutException import TimeoutException
 
 class Harness:
     """
@@ -21,8 +23,9 @@ class Harness:
         "ocamltest.cma",
     ]
 
-    def __init__(self, test_file):
+    def __init__(self, test_file, timeout):
         self.log = Log()
+        self.timeout = timeout
         
         self.test_file = test_file
         self.src_file = "%s.ml" % test_file[:-(len("_test.ml"))]
@@ -67,7 +70,7 @@ class Harness:
             # Replace vanilla newlines with indented newlines.
             nocompile_msg = ("%s\n%s" % (err_msg, sourceError)).replace("\n", "\n  ")
             self.log.nocompile(nocompile_msg)
-            raise InvalidTest(1)
+            raise InvalidTestException(1)
 
     def generate_scripts(self, test_interface):
         """
@@ -138,13 +141,10 @@ class Harness:
         ])
         with Timer() as t:
             try:
-                output = subprocess.check_output(run_test, shell=True, stderr=subprocess.STDOUT)
-            except subprocess.CalledProcessError as cpe:
-                # TODO what kind of craziness is gonna show up here?
-                # File "_none_", line 1: Error: Reference to undefined global `Setup'
-                self.log.error("Something went terribly wrong. Alert the proper authorities right away: %s" % (self.test_name, cpe.output))
-                return None
-        err_msg = self._error_of_output(output) # Maybe None
+                output, err = TimedProcess(run_test).run(self.timeout)
+                err_msg = self._error_of_output(output) # Maybe None
+            except TimeoutException:
+                err_msg = "TIMEOUT"
         if not err_msg:
             self.log.success("PASS in %0.3f seconds" % t.duration)
         else:
@@ -172,10 +172,10 @@ class Harness:
         """
         if not os.path.exists(self.src_file):
             self.log.warn("Source file '%s' not found. Skipping %s..." % (self.src_name, self.test_name))
-            raise InvalidTest(0)
+            raise InvalidTestException(0)
         if not os.path.exists(self.test_file):
             self.log.warn("Test file '%s' not found. Exiting..." % self.test_name)
-            raise InvalidTest(0)
+            raise InvalidTestException(0)
 
     def _error_of_output(self, toplevel_output):
         """
