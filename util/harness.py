@@ -1,7 +1,8 @@
 import os, re, subprocess
 
-from log import Log
-from timer import Timer
+from util.invalidTest import InvalidTest
+from util.log import Log
+from util.timer import Timer
 
 class Harness:
     """
@@ -66,7 +67,7 @@ class Harness:
             # Replace vanilla newlines with indented newlines.
             nocompile_msg = ("%s\n%s" % (err_msg, sourceError)).replace("\n", "\n  ")
             self.log.nocompile(nocompile_msg)
-            exit(1)
+            raise InvalidTest(1)
 
     def generate_scripts(self, test_interface):
         """
@@ -171,10 +172,10 @@ class Harness:
         """
         if not os.path.exists(self.src_file):
             self.log.warn("Source file '%s' not found. Skipping %s..." % (self.src_name, self.test_name))
-            exit(0)
+            raise InvalidTest(0)
         if not os.path.exists(self.test_file):
             self.log.warn("Test file '%s' not found. Exiting..." % self.test_name)
-            exit(0)
+            raise InvalidTest(0)
 
     def _error_of_output(self, toplevel_output):
         """

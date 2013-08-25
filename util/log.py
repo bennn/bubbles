@@ -1,6 +1,7 @@
 import time
 
 from termcolor import colored
+from termcolor import poo
 
 class Log:
     """
