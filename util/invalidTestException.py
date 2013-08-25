@@ -1,4 +1,4 @@
-class InvalidTest(Exception):
+class InvalidTestException(Exception):
     """
         2013-08-24:
             Raised for the harness to short-circuit a test
