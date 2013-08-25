@@ -193,6 +193,7 @@ class Harness:
 
             2013-08-24:
                 Added logic to print the non-exception printouts
+                You know, we could probably just check that the output's "- : unit"
         """
         match = re.search(r"#.*?(Exception: .*)\n#", toplevel_output, re.DOTALL)
         if match is not None:
