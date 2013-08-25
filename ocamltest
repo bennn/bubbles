@@ -157,9 +157,11 @@ class Main(object):
         else:
             timeoutStr = self.options['-t']
             try: 
-                return int(timeoutStr)
-            except TypeError:
-                self.log.error("Expected integer-valued timeout, received %s" % timeoutStr)
+                timeout = float(timeoutStr)
+                if timeout < 0: raise ValueError
+                else:           return timeout
+            except ValueError:
+                self.log.error("-t expected a postive number, received '%s'" % timeoutStr)
                 exit(1)
 
 if __name__ == "__main__":
