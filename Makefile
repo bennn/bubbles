@@ -1,3 +1,9 @@
+clean:
+	find . -name '*.cmi' | xargs rm
+	find . -name '*.cmo' | xargs rm
+	find . -name '*.cma' | xargs rm
+	find . -name 'a.out' | xargs rm
+
 install:
 	ocamlc -g -o dump.cma -a dump.ml
 	echo `ocamlc -where` | xargs cp dump.* 
