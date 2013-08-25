@@ -54,7 +54,8 @@ class Harness:
         try:
             # Compile both files, then infer and return the interface
             subprocess.check_output(compile_all, shell=True, stderr=subprocess.STDOUT)
-            interface = subprocess.check_output(infer_interface, shell=True, stderr=subprocess.STDOUT)
+            # 2013-08-23: Reached this line without making a .cmo Dear diary, this was bad
+            interface = subprocess.check_output(infer_interface, shell=True)
             return interface.split("\n")
         except subprocess.CalledProcessError as cpe:
             # NO COMPILEEEEEEEE
@@ -166,14 +167,14 @@ class Harness:
     def _check_paths(self):
         """
             2013-08-23:
-                Make sure the source and test files exist. 
+                Make sure the source and test files (still) exist.
         """
         if not os.path.exists(self.src_file):
-            self.log.error("Source file '%s' not found. Exiting..." % self.src_name)
-            exit(1)
+            self.log.warn("Source file '%s' not found. Skipping %s..." % (self.src_name, self.test_name))
+            exit(0)
         if not os.path.exists(self.test_file):
-            self.log.error("Test file '%s' not found. Exiting..." % self.test_name)
-            exit(1)
+            self.log.warn("Test file '%s' not found. Exiting..." % self.test_name)
+            exit(0)
 
     def _error_of_output(self, toplevel_output):
         """
