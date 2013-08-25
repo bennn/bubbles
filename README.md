@@ -1,6 +1,10 @@
 bubbles
 =======
-A simple unit testing framework for OCaml. It's slowly coming into its own.
+A simple unit testing framework for OCaml. Really its quite nice.
+
+Disclaimer
+----------
+This project does not work on Windows. Sorry.
 
 Installation
 ------------
