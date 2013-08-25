@@ -15,7 +15,7 @@ class Harness:
     """
 
     # In order of dependence
-    LIBRARIES = [
+    LIBS = [
         "dump.cma",
         "ocamltest.cma",
     ]
@@ -44,7 +44,7 @@ class Harness:
         self.log.info("Compiling %s and %s" % (self.src_name, self.test_name))
         # Prepare compilation commands. 
         # 2013-08-23: Base command includes standard testing library
-        base_command = "ocamlc %s" % " ".join(self.LIBRARIES)
+        base_command = " ".join(["ocamlc"] + self.LIBS)
         # 2013-08-23: Full compilations uses '-g' option to generate debug information
         compile_all = "%s -g %s %s" % (base_command, self.src_file, self.test_file)
         # Name of the .cmo file generated after compiling the source
@@ -130,7 +130,7 @@ class Harness:
         run_test = " ".join([
             "echo \"%s\" |" % script,
             "ocaml",
-            ] + self.LIBRARIES + [
+            ] + self.LIBS + [
             "%s.cmo" % self.src_file[:-(len(".ml"))],
             "%s.cmo" % self.test_file[:-(len(".ml"))]
         ])
@@ -140,9 +140,9 @@ class Harness:
             except subprocess.CalledProcessError as cpe:
                 # TODO what kind of craziness is gonna show up here?
                 # File "_none_", line 1: Error: Reference to undefined global `Setup'
-                self.log.error("Failed to run : %s" % (self.test_name, cpe.output))
+                self.log.error("Something went terribly wrong. Alert the proper authorities right away: %s" % (self.test_name, cpe.output))
                 return None
-        err_msg = self._error_of_output(output)
+        err_msg = self._error_of_output(output) # Maybe None
         if not err_msg:
             self.log.success("PASS in %0.3f seconds" % t.duration)
         else:
@@ -182,17 +182,31 @@ class Harness:
                 whether the tests passed. Manually check if the code raised an
                 assertion error. 
                 
-                TODO this is not very rigorous! It assumes there will be exactly two
-                octothorps in the output, and that the text we care about lies between
-                them! This is a reasonable assumption but still it makes me nervous
+                TODO this is not very rigorous! It assumes there will be an octothorp
+                at the end of the output!
+                This is a reasonable assumption but still it makes me nervous
+
             2013-08-23:
-                Ignores input errors. If the code sent to the toplevel has 
-                a syntax error or whatever, things will break down seriously. 
+                Ignores input errors. If the code this file sends to the toplevel
+                has a syntax error or whatever, things will break down seriously. 
                 I think its safe to assume that'll never happen in a release.
+
+            2013-08-24:
+                Added logic to print the non-exception printouts
         """
-        message = re.search(r"# (.*)\n#", toplevel_output, re.DOTALL).group(1).strip()
-        if message != "- : unit = ()":
-            return message
+        match = re.search(r"#.*?(Exception: .*)\n#", toplevel_output, re.DOTALL)
+        if match is not None:
+            # Debug output will be octothorp to exception.
+            debug_match = re.search(r"# (.*?)Exception:", toplevel_output, re.DOTALL)
+            message = match.group(1).strip()
+        else:
+            # Debug output will be octothorp to return value
+            debug_match = re.search(r"# (.*?)\n- :", toplevel_output, re.DOTALL)
+            message = None
+        # Print the debug output, if any
+        if debug_match is not None and debug_match.group(1):
+            print(debug_match.group(1))
+        return message
 
     def _source_of_exception(self, errorMessage):
         """
