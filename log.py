@@ -32,7 +32,7 @@ class Log:
     def pprint_failures(self, error_messages, duration):
         self.failure("FAILURE in %0.3f seconds" % duration)
         for (module_name, errors) in error_messages.iteritems():
-            print(colored("%s_test.ml" % module_name, color="red", attrs=["bold"]))
+            print(colored("%s.ml" % module_name, color="red", attrs=["bold"]))
             for (fn_name, err_msg) in errors:
                 self.failure("> %s - %s" % (fn_name, err_msg))
         self.failure("\n\"START TRAINING\nMAKE A COMEBACK!\"")
