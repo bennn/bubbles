@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 import subprocess, sys, re, os
 
-from harness import Harness
-from log import Log
-from timer import Timer
+from util.harness import Harness
+from util.invalidTest import InvalidTest
+from util.log import Log
+from util.timer import Timer
 
 class Main(object):
 
@@ -58,11 +59,15 @@ class Main(object):
         error_messages = {}
         with Timer() as t:
             for test_file in to_run:
-                failures = Harness(test_file).failures
-                if bool(failures):
-                    # 2013-08-23: Something went wrong, better record it.
-                    test_name = test_file.split("/")[-1][:-(len(".ml"))]
-                    error_messages[test_name] = failures
+                try: 
+                    failures = Harness(test_file).failures
+                    if bool(failures):
+                        # 2013-08-23: Something went wrong, better record it.
+                        test_name = test_file.split("/")[-1][:-(len(".ml"))]
+                        error_messages[test_name] = failures
+                except InvalidTest as e:
+                    # Optionally do something based on status code
+                    pass
         self.log.header("Results")
         if bool(error_messages):
             self.log.pprint_failures(error_messages, t.duration)
