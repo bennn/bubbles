@@ -14,6 +14,12 @@ class Harness:
             - Execute each test case in a separate ocaml toplevel, record output
     """
 
+    # In order of dependence
+    LIBRARIES = [
+        "dump.cma",
+        "ocamltest.cma",
+    ]
+
     def __init__(self, test_file):
         self.log = Log()
         
@@ -38,7 +44,7 @@ class Harness:
         self.log.info("Compiling %s and %s" % (self.src_name, self.test_name))
         # Prepare compilation commands. 
         # 2013-08-23: Base command includes standard testing library
-        base_command = "ocamlc ocamltest.cma"
+        base_command = "ocamlc %s" % " ".join(self.LIBRARIES)
         # 2013-08-23: Full compilations uses '-g' option to generate debug information
         compile_all = "%s -g %s %s" % (base_command, self.src_file, self.test_file)
         # Name of the .cmo file generated after compiling the source
@@ -124,7 +130,7 @@ class Harness:
         run_test = " ".join([
             "echo \"%s\" |" % script,
             "ocaml",
-            "ocamltest.cma", # standard testing library
+            ] + self.LIBRARIES + [
             "%s.cmo" % self.src_file[:-(len(".ml"))],
             "%s.cmo" % self.test_file[:-(len(".ml"))]
         ])
