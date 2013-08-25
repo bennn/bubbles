@@ -231,9 +231,9 @@ class Harness:
                 try:
                     if message:
                         return("     %s %s---> %s %s" % \
-                            (line_num-1, message, line_num, next(f).strip()))
+                            (line_num-1, message, line_num, next(f).rstrip()))
                     else:
-                        return("---> %s %s" % (line_num, next(f).strip()))
+                        return("---> %s %s" % (line_num, next(f).rstrip()))
                 except StopIteration:
                     # File ended unexpectedly. Add an empty line and point to it
                     return("     %s %s---> %s <unexpected end of file>" \
