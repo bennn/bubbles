@@ -1,7 +1,6 @@
 import os, signal, subprocess, threading
 
-from log import Log
-from timeoutException import TimeoutException
+from util.timeoutException import TimeoutException
 
 class TimedProcess(object):
     """

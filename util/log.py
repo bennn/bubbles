@@ -1,13 +1,11 @@
 import time
 
-from termcolor import colored
+from util.termcolor import colored
 
 class Log:
     """
         2013-07-27:
             Wrapper for printing color coded messages to the console
-
-            TODO add backgrounds
     """
 
     def error(self, msg):

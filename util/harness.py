@@ -1,10 +1,10 @@
 import os, re, subprocess
 
-from invalidTestException import InvalidTestException
-from log import Log
-from timer import Timer
-from timedProcess import TimedProcess
-from timeoutException import TimeoutException
+from util.invalidTestException import InvalidTestException
+from util.log import Log
+from util.timer import Timer
+from util.timedProcess import TimedProcess
+from util.timeoutException import TimeoutException
 
 class Harness:
     """
