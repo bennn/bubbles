@@ -220,13 +220,23 @@ class Harness:
             return ""
         else:
             fname = match.group(1)
-            lineNo = int(match.group(2))
+            line_num = int(match.group(2))
             with open(fname, "r") as f:
                 currentLine = 1
-                while currentLine < lineNo:
+                message = ""
+                while currentLine < line_num:
                     currentLine += 1
-                    next(f)
-                return "---> %s" % (next(f).strip())
+                    message = next(f)
+                try:
+                    if message:
+                        return("     %s %s---> %s %s" % \
+                            (line_num-1, message, line_num, next(f).strip()))
+                    else:
+                        return("---> %s %s" % (line_num, next(f).strip()))
+                except StopIteration:
+                    # File ended unexpectedly. Add an empty line and point to it
+                    return("     %s %s---> %s <unexpected end of file>" \
+                        % (line_num-1, message, line_num))
 
     def _toplevel_input(self, module_name, test_case):
         """
