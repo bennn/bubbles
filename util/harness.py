@@ -48,7 +48,7 @@ class Harness:
         self.log.info("Compiling %s and %s" % (self.src_name, self.test_name))
         # Prepare compilation commands. 
         # 2013-08-23: Base command includes standard testing library
-        base_command = " ".join(["ocamlc"] + self.LIBS)
+        base_command = " ".join(["ocamlc -c"] + self.LIBS)
         # 2013-08-23: Full compilations uses '-g' option to generate debug information
         compile_all = "%s -g %s %s" % (base_command, self.src_file, self.test_file)
         # Name of the .cmo file generated after compiling the source
