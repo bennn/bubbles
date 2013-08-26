@@ -19,9 +19,8 @@ class Main(object):
 
     def __init__(self, *args):
         # TODO support test pattern matching, instead of run all 
-        self.args = args
         self.log = Log()
-        self.solution_dir, self.student_dir, self.timeout = self.parse_args()
+        self.solution_dir, self.student_dir, self.timeout = self.parse_args(args[1:])
 
     def find_modules(self):
         """
@@ -43,40 +42,37 @@ class Main(object):
             self.log.error("Something went horribly wrong finding the solution files")
             exit(1)
         # Got solution tests, make sure matching files exist for each
-        solutions = []
-        for m in matchesStr.split("\n"):
+        output = []
+        for m in (x for x in matchesStr.split("\n") if x):
             splitByFolder = m.split("/")
-            filepath = splitByFolder[:-1]
-            filename = splitByFolder[-1]
-            if re.search(r"[\s]", filename):
-                self.log.warn("Skipping test case '%s'. There should be no whitespace in filenames." % filename)
+            sol_dir = "/".join(splitByFolder[:-1])
+            test_name = splitByFolder[-1]
+            if re.search(r"[\s]", test_name):
+                self.log.warn("Skipping test case '%s'. There should be no whitespace in filenames." % src_name)
             else:
-                impl_name = "%s.ml" % filename[:-(len("_test.ml"))]
-                sol = "%s/%s" % (filepath, impl_name)
+                src_nosuffix = test_name[:-(len("_test.ml"))]
+                sol_name = "%s_sol.ml" % src_nosuffix
+                src_name = "%s.ml" % src_nosuffix
+                sol = "%s/%s" % (sol_dir, sol_name)
                 if not os.path.exists(sol):
-                    self.log.warn("Skipping test case '%s'. No matching implementation file found." % filename)
+                    self.log.warn("Skipping test case '%s'. No matching implementation file found." % src_name)
                 else:
-                    solutions.append((sol, m))
-        # Got solutions, find students
-        output = [] # List of 3-tuples: sol, test, student
-        for (sol, test) in solutions:
-            impl_name = sol.split("/")[-1]
-            find_command = " ".join(["find", self.student_dir, "-name", "'%s'" % impl_name])
-            matches = []
-            try:
-                matchesStr = subprocess.check_output(find_command, shell=True)
-                matches = matchesStr.split("\n")
-            except subprocess.CalledProcessError as cpe:
-                self.log.error("Something went terribly wrong finding student file '%s'" % impl_name)
-                exit(1)
-            if not matches:
-                self.log.warn("Could not find student file '%s'" % impl_name)
-                output.append((sol, test, None))
-            else:
-                output.append((sol, test, matches[0]))
+                    # Find the student file, if exists
+                    find_command = " ".join(["find", self.student_dir, "-name", "'%s'" % src_name])
+                    try:
+                        matchesStr = subprocess.check_output(find_command, shell=True)
+                        matches = matchesStr.split("\n")
+                    except subprocess.CalledProcessError as cpe:
+                        self.log.error("Something went terribly wrong finding student file '%s'" % impl_name)
+                        exit(1)
+                    if not matches:
+                        self.log.warn("Could not find student file '%s'" % impl_name)
+                    else:
+                        stu_dir = "/".join(matches[0].split("/")[:-1])
+                        output.append((src_name, sol_dir, stu_dir))
         return output
 
-    def parse_args(self):
+    def parse_args(self, args):
         """
             2013-08-26:
                 Return solution dir, student dir, timeout
@@ -87,7 +83,7 @@ class Main(object):
         student_dir = None
         timeout = None
         i = 0
-        while i < len(self.args):
+        while i < len(args):
             if args[i] == "-t" or args[i] == "--timeout":
                 if timeout is not None:
                     self.log.error("Invalid arguments. Timeout set twice in '%s'" % " ".join(self.args))
@@ -145,6 +141,12 @@ class Main(object):
             2013-08-23:
                 Handle control flow, find the test files to be run,
                 run a harness for each test file
+
+                TODO briefly check finding
+
+                TODO rename 'harness', to differentiate between those single 
+                harnesses and the entire test suite. I guess 'harness.py' can be
+                'test.py'... it refers to a single file
         """
         # Make sure everything's installed well enough
         self._check_install()
@@ -154,12 +156,13 @@ class Main(object):
             # No tests, terminate early
             self.log.warn("Found 0 tests matching pattern")
             return
+        self.log.debug("TO_RUN = %s" % to_run)
         # We have tests! Start a timer and run them.
         error_messages = {}
         with Timer() as t:
-            for (solution_file, test_file, student_file) in to_run:
+            for (src_name, sol_dir, stu_dir) in to_run:
                 try: 
-                    failures = Harness(solution_file, test_file, student_file, self.timeout).run()
+                    failures = Harness(src_name, sol_dir, stu_dir, self.timeout).run()
                     if bool(failures):
                         # 2013-08-23: Something went wrong, better record it.
                         test_name = test_file.split("/")[-1][:-(len(".ml"))]
