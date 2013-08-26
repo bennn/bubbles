@@ -1,7 +1,6 @@
 bubbles
 =======
-A simple unit testing framework for OCaml.
-It's slowly coming into its own.
+A simple test harness in ocaml. Give it a solutions + tests directory, source directory, and lett'er rip.
 
 Disclaimer
 ----------
