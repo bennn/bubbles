@@ -23,33 +23,58 @@ class Main(object):
         self.log = Log()
         self.solution_dir, self.student_dir, self.timeout = self.parse_args()
 
-    def find_modules(self, pattern, directory):
+    def find_modules(self):
         """
             2013-07-28:
-                Search the filesystem (`directory` on down) for
-                modules matching `pattern`
-
-                TODO in master mode, search for tests matching pattern in the 
-                     master directory, then find abs paths to corresponding files
-                     in the student directory and return those
+                First search `self.solution_dir` for test cases
+                Ensure that matching implementation files exist (weakly assure)
+                Finally search `self.student_dir` for matching implementation files
         """
-        find_command = " ".join(["find", directory, "-name", "'*%s*.ml'" % pattern])
+        find_command = " ".join([
+            "find", 
+            self.solution_dir, 
+            "-name", 
+            "'*_test.ml'"
+        ])
+        matchesStr = ""
         try:
-            matchesStr = subprocess.check_output(find_command, shell=True, stderr=subprocess.STDOUT)
-            matches = []
-            for m in matchesStr.split("\n"):
-                # 2013-08-23: We're only concerned with test files. `xxx_test.ml`
-                if m.endswith("_test.ml"):
-                    filename = m.split("/")[-1]
-                    if re.search(r"[\s]", filename):
-                        # 2013-08-26: Whitespace in a module name is invalid anyway.
-                        self.log.warn("Skipping test case '%s'. There should be no whitespace in filenames." % filename)
-                    else:
-                        matches.append(m)
-            return matches
+            matchesStr = subprocess.check_output(find_command, shell=True)
         except subprocess.CalledProcessError as cpe:
-            self.log.error("%s  Make certain environment variable OCAMLTEST_HOME is set to a valid folder on your file system." % cpe.output)
+            self.log.error("Something went horribly wrong finding the solution files")
             exit(1)
+        # Got solution tests, make sure matching files exist for each
+        solutions = []
+        for m in matchesStr.split("\n"):
+            splitByFolder = m.split("/")
+            filepath = splitByFolder[:-1]
+            filename = splitByFolder[-1]
+            if re.search(r"[\s]", filename):
+                self.log.warn("Skipping test case '%s'. There should be no whitespace in filenames." % filename)
+            else:
+                impl_name = "%s.ml" % filename[:-(len("_test.ml"))]
+                sol = "%s/%s" % (filepath, impl_name)
+                if not os.path.exists(sol):
+                    self.log.warn("Skipping test case '%s'. No matching implementation file found." % filename)
+                else:
+                    solutions.append((sol, m))
+        # Got solutions, find students
+        output = [] # List of 3-tuples: sol, test, student
+        for (sol, test) in solutions:
+            impl_name = sol.split("/")[-1]
+            find_command = " ".join(["find", self.student_dir, "-name", "'%s'" % impl_name])
+            matches = []
+            try:
+                matchesStr = subprocess.check_output(find_command, shell=True)
+                matches = matchesStr.split("\n")
+            except subprocess.CalledProcessError as cpe:
+                self.log.error("Something went terribly wrong finding student file '%s'" % impl_name)
+                exit(1)
+            if not matches:
+                self.log.warn("Could not find student file '%s'" % impl_name)
+                output.append((sol, test, None))
+            else:
+                output.append((sol, test, matches[0]))
+        return output
 
     def parse_args(self):
         """
@@ -124,19 +149,17 @@ class Main(object):
         # Make sure everything's installed well enough
         self._check_install()
         # Find test files
-        # TODO find pattern needs to be different if we're in master/initiate mode
-        to_run = list(self.find_modules(self.pattern, self._solutiondir(), self._studentdir()))
+        to_run = list(self.find_modules())
         if not bool(to_run):
             # No tests, terminate early
             self.log.warn("Found 0 tests matching pattern")
             return
         # We have tests! Start a timer and run them.
         error_messages = {}
-        timeout = self._timeout()
         with Timer() as t:
-            for student_file in to_run:
+            for (solution_file, test_file, student_file) in to_run:
                 try: 
-                    failures = Harness(student_file, timeout).run()
+                    failures = Harness(solution_file, test_file, student_file, self.timeout).run()
                     if bool(failures):
                         # 2013-08-23: Something went wrong, better record it.
                         test_name = test_file.split("/")[-1][:-(len(".ml"))]
