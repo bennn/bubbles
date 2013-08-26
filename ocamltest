@@ -16,7 +16,7 @@ class Main(object):
         "-t" : "--timeout : Set the time limit (in seconds) for tests. Default is %s seconds." % DEFAULT_TIMEOUT,
         "-v" : "--version : Echo version number, then exit.",
     }
-    version = "0.7"
+    version = "1.00"
 
     def __init__(self, *args):
         self.log = Log()
