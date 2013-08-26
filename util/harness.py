@@ -19,7 +19,6 @@ class Harness:
 
     # In order of dependence
     LIBS = [
-        # "dump.cma",
         "ocamltest.cma",
     ]
 
@@ -261,4 +260,3 @@ class Harness:
                  from the right module
         """
         return "%s.%s ();;" % (module_name.capitalize(), test_case)
-
