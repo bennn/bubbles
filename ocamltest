@@ -10,13 +10,18 @@ class Main(object):
 
     DEFAULT_TIMEOUT = 20
     github_url = "https://github.com/bennn/bubbles"
+    SUPPORTED_OPTIONS = {
+        "-d": "--directory : Set the directory in which to search for test files. Default is $OCAMLTEST_HOME if set, else the cwd.",
+        "-h" : "--help : Print this message, then exit.",
+        "-t" : "--timeout : Set the time limit (in seconds) for tests. Default is %s seconds." % DEFAULT_TIMEOUT,
+        "-v" : "--version : Echo version number, then exit.",
+    }
     version = "0.7"
 
     def __init__(self, *args):
         self.log = Log()
-        
-        # TODO this is not very error-tolerant
-        self.options = self._options(args[1:-1])
+        self.pattern = ""
+        self.options = self._options(args[1:])
 
     def find_modules(self, pattern, directory):
         """
@@ -24,7 +29,6 @@ class Main(object):
                 Search the filesystem (`directory` on down) for
                 modules matching `pattern`
         """
-        directory = self._directory_fallback(directory)
         find_command = " ".join(["find", directory, "-name", "'*%s*.ml'" % pattern])
         try:
             matchesStr = subprocess.check_output(find_command, shell=True, stderr=subprocess.STDOUT)
@@ -39,16 +43,20 @@ class Main(object):
             2013-07-28:
                 Documentation stub.
         """
-        hs = [
-            "Usage: ocamltest [options] [pattern]",
+        help_message = [
             "  Searches for files ending with '_test.ml' which match the given pattern,\n  or all tests from $OCAMLTEST_HOME on down if no pattern is given",
-            "Supported options:",
-            "-d --directory : Set the directory in which to search for test files. Default is $OCAMLTEST_HOME if set, else the cwd.", #2013-07-28: TODO explain this better
-            "-h --help : Print this message, then exit.",
-            "-t --timeout : Set the time limit (in seconds) for tests. Default is %s seconds." % self.DEFAULT_TIMEOUT,
-            "-v --version : Echo version number, then exit.",
+            "Supported options:"
         ]
-        print("\n".join(hs))
+        self.print_usage()
+        print("\n".join(help_message))
+        self.print_supported_options()
+
+    def print_supported_options(self):
+        print("\n".join(( "%s %s" % (k, self.SUPPORTED_OPTIONS[k])
+            for k in sorted(self.SUPPORTED_OPTIONS.keys()))))
+
+    def print_usage(self):
+        print("Usage: ocamltest [options] [pattern]")
 
     def print_version(self):
         """
@@ -57,7 +65,7 @@ class Main(object):
         """
         print("ocamltest version %s\nHome directory: %s\nStay updated at: %s" % (self.version, os.getcwd(), self.github_url))
 
-    def run(self, pattern):
+    def run(self):
         """
             2013-08-23:
                 Handle control flow, find the test files to be run,
@@ -66,7 +74,7 @@ class Main(object):
         # Make sure everything's installed well enough
         self._check_install()
         # Find test files
-        to_run = list(self.find_modules(pattern, self.options.get("-d", None)))
+        to_run = list(self.find_modules(self.pattern, self._directory()))
         if not bool(to_run):
             # No tests, terminate early
             self.log.warn("Found 0 tests matching pattern")
@@ -103,17 +111,42 @@ class Main(object):
                 - ocamltest.ml is installed wherever ocamlc expects to find it
         """
         if not os.environ.get('OCAMLTEST_HOME'):
-            self.log.warn("""Environment variable 'OCAMLTEST_HOME' not found. 
-         Set it to your project root via the shell command `export OCAMLTEST_HOME=<path-to-your-project>`.""")
+            self.log.warn("\n".join([
+                "Environment variable 'OCAMLTEST_HOME' not found.",
+                "         Set it to your project root via the shell command `export OCAMLTEST_HOME=<path-to-your-project>`.",
+            ]))
         ocamltest_files = ['ocamltest.cma', 'ocamltest.cmi', 'ocamltest.cmo']
         find_files = ( subprocess.check_output("find `ocamlc -where` -name '%s'" % fname, shell=True)
             for fname in ocamltest_files )
         if not (len(ocamltest_files) == len([x for x in find_files if x])):
-            self.log.error("""ocamltest.ml not properly installed. You may either:
-       - Run `make install` with root permissions
-       - Manually compile 'ocamltest.ml', creating a .cma library (`ocamlc -a -o ocamltest.ml`) and then 
-         moving 'ocamltest.cma', 'ocamltest.cmo', and 'ocamltest.cmi' to wherever your ocaml standard library files are stored.""")
+            self.log.error("\n".join([
+                "ocamltest.ml not properly installed. You may either:",
+                "       - Run `make install` with root permissions",
+                "       - Manually compile 'ocamltest.ml', creating a .cma library (`ocamlc -a -o ocamltest.ml`) and then",
+                "         moving 'ocamltest.cma', 'ocamltest.cmo', and 'ocamltest.cmi' to wherever your ocaml standard library files are stored.",
+            ]))
             exit(1)
+
+    def _directory(self):
+        """
+            2013-07-28:
+                Q: which part of the filesystem should we search for test files?
+                A: 1. the part the user specified with an option,
+                   2. the part set in an environment variable,
+                   3. or the current working directory
+
+                TODO test ~
+        """
+        user_dir = self.options.get("-d", None)
+        # Convert to absolute path?
+        if user_dir is not None and os.path.exists(user_dir):
+            if user_dir.startswith("."):
+                user_dir = "%s%s" % (os.getcwd(), user_dir[1:])
+            return user_dir
+        # elif os.environ.get('OCAMLTEST_HOME'):
+        #     return os.environ.get('OCAMLTEST_HOME')
+        else:
+            return os.getcwd()
 
     def _collapse_flags(self, args):
         """
@@ -129,24 +162,46 @@ class Main(object):
                 new_args.append(arg)
         return new_args
 
-    def _directory_fallback(self, directory):
-        """
-            2013-07-28:
-                Q: which part of the filesystem should we search for test files?
-                A: the part the user specified with an option,
-                   the part set in an environment variable,
-                   or the current working directory
-        """
-        if directory:
-            return directory
-        elif os.environ.get('OCAMLTEST_HOME'):
-            return os.environ.get('OCAMLTEST_HOME')
-        else:
-            return os.getcwd()
-
     def _options(self, args):
-        args = self._collapse_flags(args)
-        return dict(zip(args[:2], args[1:2]))
+        """
+            2013-08-25:
+                Extract the argument-taking options from the commandline args,
+                make sure each supplied option is valid.
+
+                TODO test failure routes here
+        """
+        options = {}
+        i = 0
+        while i < len(args):
+            key, long_key = None, None
+            if re.match(r"--[a-z]", args[i]):
+                # Found a long-style option. Strip it to short style
+                long_key = args[i]
+                key = long_key[1:3]
+            elif re.match(r"-[a-z]", args[i]):
+                # Found a short-style option
+                key = args[i]
+            else:
+                self.pattern = args[i]
+            if key is None and (i+1) < len(args):
+                # No option found yet `i` wasn't the last argument. Misplaced! 
+                self.log.error("Invalid / misplaced argument '%s'" % args[i])
+                self.print_usage()
+                exit(1)
+            elif key is not None:
+                # Add the option, make sure it's supported
+                try:
+                    if key not in self.SUPPORTED_OPTIONS:
+                        self.log.error("Unknown option '%s'" % (long_key or key))
+                        exit(1)
+                    options[key] = args[i+1]
+                    i += 2
+                except IndexError:
+                    self.log.error("Trailing option %s needs an argument" % key)
+                    exit(1)
+            else:
+                i += 1
+        return options
 
     def _timeout(self):
         """
@@ -161,8 +216,10 @@ class Main(object):
             timeoutStr = self.options['-t']
             try: 
                 timeout = float(timeoutStr)
-                if timeout < 0: raise ValueError
-                else:           return timeout
+                if timeout < 0: 
+                    raise ValueError
+                else:
+                    return timeout
             except ValueError:
                 self.log.error("-t expected a postive number, received '%s'" % timeoutStr)
                 exit(1)
@@ -179,4 +236,4 @@ if __name__ == "__main__":
             # 2013-08-23: No arguments = run all tests
             sys.argv.append("")
         h = Main(*sys.argv)
-        h.run(sys.argv[-1])
+        h.run()

@@ -208,7 +208,7 @@ class Harness:
             message = None
         # Print the debug output, if any
         if debug_match is not None and debug_match.group(1):
-            print(debug_match.group(1))
+            print(debug_match.group(1).rstrip())
         return message
 
     def _source_of_exception(self, errorMessage):
