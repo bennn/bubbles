@@ -10,20 +10,18 @@ class Main(object):
 
     DEFAULT_TIMEOUT = 20
     github_url = "https://github.com/bennn/bubbles"
-    # TODO pick a foil for 'master'
     SUPPORTED_OPTIONS = {
-        "-d": "--directory : Set the directory in which to search for test files. Default is $OCAMLTEST_HOME if set, else the cwd.",
         "-h" : "--help : Print this message, then exit.",
-        "-m" : "--master : Specify directory where master files + tests are found. Pattern searches for files to test against the master.",
         "-t" : "--timeout : Set the time limit (in seconds) for tests. Default is %s seconds." % DEFAULT_TIMEOUT,
         "-v" : "--version : Echo version number, then exit.",
     }
     version = "1.00"
 
     def __init__(self, *args):
+        # TODO support test pattern matching, instead of run all 
+        self.args = args
         self.log = Log()
-        self.pattern = ""
-        self.options = self._options(args[1:])
+        self.solution_dir, self.student_dir, self.timeout = self.parse_args()
 
     def find_modules(self, pattern, directory):
         """
@@ -53,13 +51,50 @@ class Main(object):
             self.log.error("%s  Make certain environment variable OCAMLTEST_HOME is set to a valid folder on your file system." % cpe.output)
             exit(1)
 
+    def parse_args(self):
+        """
+            2013-08-26:
+                Return solution dir, student dir, timeout
+
+                TODO support multiple student dirs
+        """
+        solution_dir = None
+        student_dir = None
+        timeout = None
+        i = 0
+        while i < len(self.args):
+            if args[i] == "-t" or args[i] == "--timeout":
+                if timeout is not None:
+                    self.log.error("Invalid arguments. Timeout set twice in '%s'" % " ".join(self.args))
+                    exit(1)
+                else:
+                    try:
+                        timeout = args[i+1]
+                        i += 2
+                    except IndexError:
+                        self.log.error("Missing value for timeout at tail end of args: '%s'" % " ".join(self.args))
+            else:
+                if solution_dir is None:
+                    solution_dir = args[i]
+                elif student_dir is None:
+                    student_dir = args[i]
+                else:
+                    self.print_usage()
+                    exit(1)
+                i += 1
+        if (solution_dir is None) or (student_dir is None):
+            self.print_usage()
+            exit(1)
+        else:
+            return solution_dir, student_dir, (timeout or self.DEFAULT_TIMEOUT)
+
     def print_help(self):
         """
             2013-07-28:
                 Documentation stub.
         """
         help_message = [
-            "  Searches for files ending with '_test.ml' which match the given pattern,\n  or all tests from $OCAMLTEST_HOME on down if no pattern is given",
+            "  Test the files in <student-dir> against the corresponding files and test cases in <solution-dir>",
             "Supported options:"
         ]
         self.print_usage()
@@ -71,7 +106,7 @@ class Main(object):
             for k in sorted(self.SUPPORTED_OPTIONS.keys()))))
 
     def print_usage(self):
-        print("Usage: ocamltest [options] [pattern]")
+        print("Usage: ocamltest [-t <timeout>] <solution-dir> <student-dir>")
 
     def print_version(self):
         """
@@ -90,17 +125,25 @@ class Main(object):
         self._check_install()
         # Find test files
         # TODO find pattern needs to be different if we're in master/initiate mode
-        to_run = list(self.find_modules(self.pattern, self._directory()))
+        to_run = list(self.find_modules(self.pattern, self._solutiondir(), self._studentdir()))
         if not bool(to_run):
             # No tests, terminate early
             self.log.warn("Found 0 tests matching pattern")
             return
         # We have tests! Start a timer and run them.
+        error_messages = {}
+        timeout = self._timeout()
         with Timer() as t:
-            if "-m" in self.options:
-                error_messages = self._run_tests_master(to_run, self.options["-m"])
-            else:
-                error_messages = self._run_tests_normal(to_run)
+            for student_file in to_run:
+                try: 
+                    failures = Harness(student_file, timeout).run()
+                    if bool(failures):
+                        # 2013-08-23: Something went wrong, better record it.
+                        test_name = test_file.split("/")[-1][:-(len(".ml"))]
+                        error_messages[test_name] = failures
+                except InvalidTestException as e:
+                    # Optionally do something based on status code
+                    pass
         self.log.header("Results")
         if bool(error_messages):
             self.log.pprint_failures(error_messages, t.duration)
@@ -131,107 +174,6 @@ class Main(object):
             ]))
             exit(1)
 
-    def _directory(self):
-        """
-            2013-07-28:
-                Q: which part of the filesystem should we search for test files?
-                A: 1. the part the user specified with an option,
-                   2. the part set in an environment variable,
-                   3. or the current working directory
-        """
-        user_dir = self.options.get("-d", None)
-        # Convert to absolute path?
-        if user_dir is not None and os.path.exists(user_dir):
-            if user_dir.startswith("."):
-                user_dir = "%s%s" % (os.getcwd(), user_dir[1:])
-            return user_dir
-        elif os.environ.get('OCAMLTEST_HOME'):
-            return os.environ.get('OCAMLTEST_HOME')
-        else:
-            return os.getcwd()
-
-    def _collapse_flags(self, args):
-        """
-            2013-08-22:
-                Change all long flags to short flags. For example:
-                    --version => -v
-        """
-        new_args = []
-        for arg in args:
-            if arg.startswith("--"):
-                new_args.append(arg[1:3])
-            else:
-                new_args.append(arg)
-        return new_args
-
-    def _options(self, args):
-        """
-            2013-08-25:
-                Extract the argument-taking options from the commandline args,
-                make sure each supplied option is valid.
-
-                TODO test failure routes here
-        """
-        options = {}
-        i = 0
-        while i < len(args):
-            key, long_key = None, None
-            if re.match(r"--[a-z]", args[i]):
-                # Found a long-style option. Strip it to short style
-                long_key = args[i]
-                key = long_key[1:3]
-            elif re.match(r"-[a-z]", args[i]):
-                # Found a short-style option
-                key = args[i]
-            else:
-                self.pattern = args[i]
-            if key is None and (i+1) < len(args):
-                # No option found yet `i` wasn't the last argument. Misplaced! 
-                self.log.error("Invalid / misplaced argument '%s'" % args[i])
-                self.print_usage()
-                exit(1)
-            elif key is not None:
-                # Add the option, make sure it's supported
-                try:
-                    if key not in self.SUPPORTED_OPTIONS:
-                        self.log.error("Unknown option '%s'" % (long_key or key))
-                        exit(1)
-                    options[key] = args[i+1]
-                    i += 2
-                except IndexError:
-                    self.log.error("Trailing option %s needs an argument" % key)
-                    exit(1)
-            else:
-                i += 1
-        return options
-
-    def _run_tests_master(self, to_run, master_dir):
-        """
-            2013-08-26:
-                TODO to_run should be a list of .ml files
-                TODO master_dir should have solutions "file_sol.ml" and tests "file_test.ml"
-                TODO run each test case with "file.ml" and "file_sol.ml" loaded up beforehand
-        """
-        pass
-
-    def _run_tests_normal(self, to_run):
-        """
-            2013-08-26:
-                Run tests the straightforward, v1.00 way.
-        """
-        error_messages = {}
-        for test_file in to_run:
-            try: 
-                failures = Harness(test_file, self._timeout()).failures
-                if bool(failures):
-                    # 2013-08-23: Something went wrong, better record it.
-                    test_name = test_file.split("/")[-1][:-(len(".ml"))]
-                    error_messages[test_name] = failures
-            except InvalidTestException as e:
-                # Optionally do something based on status code
-                pass
-        return error_messages
-
     def _timeout(self):
         """
             2013-08-25:
@@ -261,8 +203,5 @@ if __name__ == "__main__":
     elif "-h" in options or "--help" in options:
         Main().print_help()
     else: # Run some tests
-        if len(sys.argv) == 1:
-            # 2013-08-23: No arguments = run all tests
-            sys.argv.append("")
         h = Main(*sys.argv)
         h.run()
