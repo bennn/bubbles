@@ -119,11 +119,6 @@ class Main(object):
                     to test from by default
                 - ocamltest.ml is installed wherever ocamlc expects to find it
         """
-        if not os.environ.get('OCAMLTEST_HOME'):
-            self.log.warn("\n".join([
-                "Environment variable 'OCAMLTEST_HOME' not found.",
-                "         Set it to your project root via the shell command `export OCAMLTEST_HOME=<path-to-your-project>`.",
-            ]))
         ocamltest_files = ['ocamltest.cma', 'ocamltest.cmi', 'ocamltest.cmo']
         find_files = ( subprocess.check_output("find `ocamlc -where` -name '%s'" % fname, shell=True)
             for fname in ocamltest_files )
@@ -143,8 +138,6 @@ class Main(object):
                 A: 1. the part the user specified with an option,
                    2. the part set in an environment variable,
                    3. or the current working directory
-
-                TODO test ~
         """
         user_dir = self.options.get("-d", None)
         # Convert to absolute path?
@@ -152,8 +145,8 @@ class Main(object):
             if user_dir.startswith("."):
                 user_dir = "%s%s" % (os.getcwd(), user_dir[1:])
             return user_dir
-        # elif os.environ.get('OCAMLTEST_HOME'):
-        #     return os.environ.get('OCAMLTEST_HOME')
+        elif os.environ.get('OCAMLTEST_HOME'):
+            return os.environ.get('OCAMLTEST_HOME')
         else:
             return os.getcwd()
 
