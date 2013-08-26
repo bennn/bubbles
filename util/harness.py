@@ -32,9 +32,6 @@ class Harness:
         self.test_name = self.test_file.split("/")[-1]
         self.src_name = self.src_file.split("/")[-1]
 
-        self.failures = self.run()
-        print("") # Separator
-
     def compile(self):
         """
             2013-08-23:
@@ -120,7 +117,9 @@ class Harness:
             self.log.warn("No test cases in %s" % self.test_name)
         else:
             # Execute tests
-            return self.run_tests(test_scripts)
+            failures = self.run_tests(test_scripts)
+            print("") # Separator
+            return failures
 
     def run_test(self, script):
         """
