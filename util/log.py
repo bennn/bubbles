@@ -8,6 +8,9 @@ class Log:
             Wrapper for printing color coded messages to the console
     """
 
+    def debug(self, msg):
+        print(msg)
+
     def error(self, msg):
         print(colored("Error: %s" % msg, "red"))
 
