@@ -8,7 +8,9 @@ install:
 	echo `ocamlc -where` | xargs cp dump.* 
 	ocamlc -g -o ocamltest.cma -a ocamltest.ml
 	echo `ocamlc -where` | xargs cp ocamltest.* 
+	ln -s `pwd`/ocamltest /usr/local/bin/ocamltest
 
 uninstall:
 	echo `ocamlc -where`/dump.* | xargs rm 
 	echo `ocamlc -where`/ocamltest.* | xargs rm 
+	rm /usr/local/bin/ocamltest
