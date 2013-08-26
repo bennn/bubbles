@@ -10,9 +10,11 @@ class Main(object):
 
     DEFAULT_TIMEOUT = 20
     github_url = "https://github.com/bennn/bubbles"
+    # TODO pick a foil for 'master'
     SUPPORTED_OPTIONS = {
         "-d": "--directory : Set the directory in which to search for test files. Default is $OCAMLTEST_HOME if set, else the cwd.",
         "-h" : "--help : Print this message, then exit.",
+        "-m" : "--master : Specify directory where master files + tests are found. Pattern searches for files to test against the master.",
         "-t" : "--timeout : Set the time limit (in seconds) for tests. Default is %s seconds." % DEFAULT_TIMEOUT,
         "-v" : "--version : Echo version number, then exit.",
     }
@@ -28,6 +30,10 @@ class Main(object):
             2013-07-28:
                 Search the filesystem (`directory` on down) for
                 modules matching `pattern`
+
+                TODO in master mode, search for tests matching pattern in the 
+                     master directory, then find abs paths to corresponding files
+                     in the student directory and return those
         """
         find_command = " ".join(["find", directory, "-name", "'*%s*.ml'" % pattern])
         try:
@@ -83,24 +89,18 @@ class Main(object):
         # Make sure everything's installed well enough
         self._check_install()
         # Find test files
+        # TODO find pattern needs to be different if we're in master/initiate mode
         to_run = list(self.find_modules(self.pattern, self._directory()))
         if not bool(to_run):
             # No tests, terminate early
             self.log.warn("Found 0 tests matching pattern")
             return
         # We have tests! Start a timer and run them.
-        error_messages = {}
         with Timer() as t:
-            for test_file in to_run:
-                try: 
-                    failures = Harness(test_file, self._timeout()).failures
-                    if bool(failures):
-                        # 2013-08-23: Something went wrong, better record it.
-                        test_name = test_file.split("/")[-1][:-(len(".ml"))]
-                        error_messages[test_name] = failures
-                except InvalidTestException as e:
-                    # Optionally do something based on status code
-                    pass
+            if "-m" in self.options:
+                error_messages = self._run_tests_master(to_run, self.options["-m"])
+            else:
+                error_messages = self._run_tests_normal(to_run)
         self.log.header("Results")
         if bool(error_messages):
             self.log.pprint_failures(error_messages, t.duration)
@@ -204,6 +204,33 @@ class Main(object):
             else:
                 i += 1
         return options
+
+    def _run_tests_master(self, to_run, master_dir):
+        """
+            2013-08-26:
+                TODO to_run should be a list of .ml files
+                TODO master_dir should have solutions "file_sol.ml" and tests "file_test.ml"
+                TODO run each test case with "file.ml" and "file_sol.ml" loaded up beforehand
+        """
+        pass
+
+    def _run_tests_normal(self, to_run):
+        """
+            2013-08-26:
+                Run tests the straightforward, v1.00 way.
+        """
+        error_messages = {}
+        for test_file in to_run:
+            try: 
+                failures = Harness(test_file, self._timeout()).failures
+                if bool(failures):
+                    # 2013-08-23: Something went wrong, better record it.
+                    test_name = test_file.split("/")[-1][:-(len(".ml"))]
+                    error_messages[test_name] = failures
+            except InvalidTestException as e:
+                # Optionally do something based on status code
+                pass
+        return error_messages
 
     def _timeout(self):
         """
