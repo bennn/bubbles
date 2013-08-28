@@ -80,14 +80,17 @@ class Main(object):
         timeout = None
         # Parse timeout
         if args[0] == "-t" or args[0] == "--timeout":
+            if len(args) < 4:
+                self.print_usage()
+                exit(1)
             try: 
-                timeout = float(timeoutStr)
+                timeout = float(args[1])
                 if timeout < 0: raise ValueError
             except ValueError:
                 self.log.error("-t expected a postive number, received '%s'" % timeoutStr)
                 exit(1)
-            solution_dir = args[1]
-            student_dirs = args[2:]
+            solution_dir = args[2]
+            student_dirs = args[3:]
         else:
             solution_dir = args[0]
             student_dirs = args[1:]
@@ -138,6 +141,7 @@ class Main(object):
             self.run_student(student_dir)
             
     def run_student(self, student_dir):
+        # TODO prettier
         print "RUNNING STUDENT"
         # Find test files
         to_run = list(self.find_modules(student_dir))
@@ -153,7 +157,7 @@ class Main(object):
                     failures = Harness(src_name, sol_dir, stu_dir, self.timeout).run()
                     if bool(failures):
                         # 2013-08-23: Something went wrong, better record it.
-                        test_name = test_file.split("/")[-1][:-(len(".ml"))]
+                        test_name = src_name
                         error_messages[test_name] = failures
                 except InvalidTestException as e:
                     # Optionally do something based on status code
@@ -214,7 +218,6 @@ class Main(object):
             with open(path, 'r') as f:
                 for dirname in f:
                     inferred_student_dirs.append("%s/%s" % (containing_folder, dirname.strip()))
-            print "INFERRED = %s" % inferred_student_dirs
             return inferred_student_dirs
         else:
             return student_dirs
