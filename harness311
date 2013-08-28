@@ -141,8 +141,12 @@ class Main(object):
             self.run_student(student_dir)
             
     def run_student(self, student_dir):
-        # TODO prettier
-        print "RUNNING STUDENT"
+        """
+            2013-08-28:
+                TODO the 'with' syntax would be awesome here. 
+                Enter and exit could control printouts
+        """
+        self.log.student_header(student_dir)
         # Find test files
         to_run = list(self.find_modules(student_dir))
         if not bool(to_run):
@@ -167,6 +171,7 @@ class Main(object):
             self.log.pprint_failures(error_messages, t.duration)
         else: 
             self.log.success("ALL TESTS PASS in %0.3f seconds" % t.duration)
+        print("")
 
     def _check_install(self):
         """

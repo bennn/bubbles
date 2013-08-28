@@ -41,6 +41,17 @@ class Log:
     def run(self, msg):
         print(colored(msg, "yellow"))
 
+    def student_header(self, filepath, strip_path=True):
+        """
+            2013-08-28:
+                Print out a header to separate different students' code.
+                Optionally strip everything from the path, changing:
+                    Submissions/ggg33 -> ggg33
+        """
+        if strip_path and "/" in filepath:
+            filepath = filepath.split("/")[-1]
+        print(colored("Testing student '%s'" % filepath, attrs=['bold']))
+
     def success(self, msg):
         print(colored(msg, "green"))
 
