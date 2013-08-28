@@ -19,6 +19,7 @@ class Harness:
 
     # In order of dependence
     LIBS = [
+        "dump.cma",
         "ocamltest.cma",
     ]
 
@@ -57,8 +58,11 @@ class Harness:
         self.log.info("Compiling solution files...")
         compile_sol = "%s %s/%s_sol.cma -g %s" % (base_command, self.sol_dir, self.src_nosuffix, self.sol_abs)
         compile_stu = "%s %s/%s.cma -g %s" % (base_command, self.stu_dir, self.src_nosuffix, self.stu_abs)
+        # TODO nocompiling
+        compile_test = "%s %s/%s_test.cma -g -I %s -I %s %s" % \
+            (base_command, self.sol_dir, self.src_nosuffix, self.sol_dir, self.stu_dir, self.test_abs)
         compile_test_suffix = "%s -I %s -I %s -c %s" % (" ".join(self.LIBS), self.sol_dir, self.stu_dir, self.test_abs)
-        compile_test = "ocamlc %s" % compile_test_suffix
+        # compile_test = "ocamlc %s" % compile_test_suffix
         gen_interface = "ocamlc -i %s" % compile_test_suffix
         for command in [compile_sol, compile_stu, compile_test]:
             try:
@@ -106,7 +110,7 @@ class Harness:
         if test_cases == []:
             return None
         else:
-            # Change "my_test.ml" to the module "My_test"
+            # Change "my_test.ml" to the module "My"
             test_name = self.test_name[:-(len(".ml"))].capitalize()
             return ( (case, self._toplevel_input(test_name, case))
                 for case in test_cases )
@@ -141,14 +145,15 @@ class Harness:
                 I'm not entirely happy with the piping because it means that subprocess
                 fails to throw an error when the test fails. Maybe fix that later.
         """
-        # Change dir?
         run_test = " ".join([
             "echo \"%s\" |" % script,
             "ocaml",
-            ] + self.LIBS + [
             "-I %s" % self.sol_dir,
             "-I %s" % self.stu_dir,
-            "%s/%s_test.cmo" % (self.sol_dir, self.src_nosuffix)
+            ] + self.LIBS + [
+            "%s_sol.cma" % self.src_nosuffix,
+            "%s.cma" % self.src_nosuffix, 
+            "%s_test.cma" % self.src_nosuffix,
         ])
         with Timer() as t:
             try:
