@@ -114,21 +114,22 @@ class Harness:
     def run(self):
         """
             2013-08-23:
+                Compile a test file, find the tests inside it, run each, record output
         """
         self._check_paths()
-        # Compile the test + source files
-        self.log.header("Testing %s" % self.src_name)
-        test_interface = self.compile()
-        # Generate the test scripts
-        self.log.info("Compilation succeeded! Generating test scripts...")
-        test_scripts = self.generate_scripts(test_interface)
-        if test_scripts is None:
-            self.log.warn("No test cases in %s" % self.test_name)
-        else:
-            # Execute tests
-            failures = self.run_tests(test_scripts)
-            print("") # Separator
-            return failures
+        with self.log.TestFile(self.src_name):
+            # Compile the test + source files
+            test_interface = self.compile()
+            # Generate the test scripts
+            self.log.info("Compilation succeeded! Generating test scripts...")
+            test_scripts = self.generate_scripts(test_interface)
+            if test_scripts is None:
+                self.log.warn("No test cases in %s" % self.test_name)
+                return None
+            else:
+                # Execute tests
+                failures = self.run_tests(test_scripts)
+                return failures
 
     def run_test(self, script):
         """

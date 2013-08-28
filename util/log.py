@@ -11,14 +11,14 @@ class Log:
     def debug(self, msg):
         print(msg)
 
+    def header(self, msg):
+        print(colored("--- %s ---" % msg, attrs=["bold","reverse"]))
+
     def error(self, msg):
         print(colored("Error: %s" % msg, "red"))
 
     def failure(self, msg):
         print(colored(msg, "red"))
-
-    def header(self, msg):
-        print(colored("--- %s ---" % msg, attrs=["bold","reverse"]))
 
     def info(self, msg):
         print(colored(msg, "blue"))
@@ -41,19 +41,38 @@ class Log:
     def run(self, msg):
         print(colored(msg, "yellow"))
 
-    def student_header(self, filepath, strip_path=True):
-        """
-            2013-08-28:
-                Print out a header to separate different students' code.
-                Optionally strip everything from the path, changing:
-                    Submissions/ggg33 -> ggg33
-        """
-        if strip_path and "/" in filepath:
-            filepath = filepath.split("/")[-1]
-        print(colored("Testing student '%s'" % filepath, attrs=['bold']))
-
     def success(self, msg):
         print(colored(msg, "green"))
 
     def warn(self, msg):
         print(colored("Warning: %s" % msg, "magenta"))
+        
+    class Student:
+        
+        def __init__(self, filename, strip=True):
+            if strip:
+                self.student_name = filename.split("/")[-1]
+            else:
+                self.student_name = filepath
+
+        def __enter__(self):
+            print(colored("Testing student '%s'" % self.student_name, attrs=['bold']))
+
+        def __exit__(self, *args):
+            print("")
+
+    class TestFile:
+        """
+            2013-08-28:
+                Handle pretty-printing upon entering / exiting a test case
+        """
+        
+        def __init__(self, filename):
+            self.filename = filename
+        
+        def __enter__(self):
+            print(colored("--- %s ---" % self.filename, attrs=["bold","reverse"]))
+
+        def __exit__(self, *args):
+            print("")
+

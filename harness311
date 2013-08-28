@@ -138,7 +138,8 @@ class Main(object):
         # TODO setting fields here is not good for clarity
         self.solution_dir, student_dirs, self.timeout = self.parse_args(args)
         for student_dir in self._infer_student_directories(student_dirs):
-            self.run_student(student_dir)
+            with self.log.Student(student_dir):
+                self.run_student(student_dir)
             
     def run_student(self, student_dir):
         """
@@ -146,7 +147,6 @@ class Main(object):
                 TODO the 'with' syntax would be awesome here. 
                 Enter and exit could control printouts
         """
-        self.log.student_header(student_dir)
         # Find test files
         to_run = list(self.find_modules(student_dir))
         if not bool(to_run):
@@ -166,12 +166,12 @@ class Main(object):
                 except InvalidTestException as e:
                     # Optionally do something based on status code
                     pass
+        # TODO don't use header anymore. Delete it
         self.log.header("Results")
         if bool(error_messages):
             self.log.pprint_failures(error_messages, t.duration)
         else: 
             self.log.success("ALL TESTS PASS in %0.3f seconds" % t.duration)
-        print("")
 
     def _check_install(self):
         """
