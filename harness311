@@ -169,7 +169,7 @@ class Main(object):
                     # Optionally do something based on status code
                     pass
         # TODO don't use header anymore. Delete it
-        self.log.header("Results")
+        self.log.header("Summary of Results")
         if bool(error_messages):
             self.log.pprint_failures(error_messages, t.duration)
         else: 
