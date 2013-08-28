@@ -1,3 +1,5 @@
+let zardoz _ = 42
+
 let reverse xs = List.fold_left (fun xs x -> x::xs) [] xs
 
 let sum = List.fold_left (+) 0
