@@ -181,7 +181,7 @@ class Harness:
                 Make sure the source and test files (still) exist.
         """
         if not os.path.exists(self.stu_abs):
-            self.log.warn("Source file '%s' not found. Skipping %s..." % (self.stu_name, self.test_name))
+            self.log.warn("Source file '%s' not found. Skipping %s..." % (self.src_name, self.test_name))
             raise InvalidTestException(0)
         if not os.path.exists(self.sol_abs):
             self.log.warn("Solution file '%s' not found. Skipping %s..." % (self.sol_name, self.test_name))

@@ -10,6 +10,7 @@ class Main(object):
 
     DEFAULT_TIMEOUT = 20
     github_url = "https://github.com/bennn/bubbles"
+    log = Log()
     SUPPORTED_OPTIONS = {
         "-h" : "--help : Print this message, then exit.",
         "-t" : "--timeout : Set the time limit (in seconds) for tests. Default is %s seconds." % DEFAULT_TIMEOUT,
@@ -17,17 +18,12 @@ class Main(object):
     }
     version = "1.00"
 
-    def __init__(self, *args):
-        # TODO support test pattern matching, instead of run all 
-        self.log = Log()
-        self.solution_dir, self.student_dir, self.timeout = self.parse_args(args[1:])
-
-    def find_modules(self):
+    def find_modules(self, student_dir):
         """
             2013-07-28:
                 First search `self.solution_dir` for test cases
                 Ensure that matching implementation files exist (weakly assure)
-                Finally search `self.student_dir` for matching implementation files
+                Finally search `student_dir` for matching implementation files
         """
         find_command = " ".join([
             "find", 
@@ -58,7 +54,7 @@ class Main(object):
                     self.log.warn("Skipping test case '%s'. No matching implementation file found." % src_name)
                 else:
                     # Find the student file, if exists
-                    find_command = " ".join(["find", self.student_dir, "-name", "'%s'" % src_name])
+                    find_command = " ".join(["find", student_dir, "-name", "'%s'" % src_name])
                     try:
                         matchesStr = subprocess.check_output(find_command, shell=True)
                         matches = matchesStr.split("\n")
@@ -77,37 +73,25 @@ class Main(object):
             2013-08-26:
                 Return solution dir, student dir, timeout
 
-                TODO support multiple student dirs
+                The timeout should be the first argument, if it exists.
+                Solution directory follows, then all student directories
+
         """
-        solution_dir = None
-        student_dir = None
         timeout = None
-        i = 0
-        while i < len(args):
-            if args[i] == "-t" or args[i] == "--timeout":
-                if timeout is not None:
-                    self.log.error("Invalid arguments. Timeout set twice in '%s'" % " ".join(self.args))
-                    exit(1)
-                else:
-                    try:
-                        timeout = args[i+1]
-                        i += 2
-                    except IndexError:
-                        self.log.error("Missing value for timeout at tail end of args: '%s'" % " ".join(self.args))
-            else:
-                if solution_dir is None:
-                    solution_dir = args[i]
-                elif student_dir is None:
-                    student_dir = args[i]
-                else:
-                    self.print_usage()
-                    exit(1)
-                i += 1
-        if (solution_dir is None) or (student_dir is None):
-            self.print_usage()
-            exit(1)
+        # Parse timeout
+        if args[0] == "-t" or args[0] == "--timeout":
+            try: 
+                timeout = float(timeoutStr)
+                if timeout < 0: raise ValueError
+            except ValueError:
+                self.log.error("-t expected a postive number, received '%s'" % timeoutStr)
+                exit(1)
+            solution_dir = args[1]
+            student_dirs = args[2:]
         else:
-            return solution_dir, student_dir, (timeout or self.DEFAULT_TIMEOUT)
+            solution_dir = args[0]
+            student_dirs = args[1:]
+        return solution_dir, student_dirs, timeout
 
     def print_help(self):
         """
@@ -136,13 +120,11 @@ class Main(object):
         """
         print("ocamltest version %s\nHome directory: %s\nStay updated at: %s" % (self.version, os.getcwd(), self.github_url))
 
-    def run(self):
+    def run(self, args):
         """
             2013-08-23:
                 Handle control flow, find the test files to be run,
                 run a harness for each test file
-
-                TODO briefly check finding
 
                 TODO rename 'harness', to differentiate between those single 
                 harnesses and the entire test suite. I guess 'harness.py' can be
@@ -150,13 +132,19 @@ class Main(object):
         """
         # Make sure everything's installed well enough
         self._check_install()
+        # TODO setting fields here is not good for clarity
+        self.solution_dir, student_dirs, self.timeout = self.parse_args(args)
+        for student_dir in self._infer_student_directories(student_dirs):
+            self.run_student(student_dir)
+            
+    def run_student(self, student_dir):
+        print "RUNNING STUDENT"
         # Find test files
-        to_run = list(self.find_modules())
+        to_run = list(self.find_modules(student_dir))
         if not bool(to_run):
             # No tests, terminate early
             self.log.warn("Found 0 tests matching pattern")
             return
-        self.log.debug("TO_RUN = %s" % to_run)
         # We have tests! Start a timer and run them.
         error_messages = {}
         with Timer() as t:
@@ -200,26 +188,36 @@ class Main(object):
             ]))
             exit(1)
 
-    def _timeout(self):
+    def _infer_student_directories(self, student_dirs):
         """
-            2013-08-25:
-                Get the timeout, if supplied and valid. 
-                Raise an exception for an invalid timeout, return the default
-                timeout otherwise.
+            2013-08-26:
+                If the commandline argument for student directories
+                begins with an @ symbol, like '@./Submissions/netids`, 
+                interpret the argument as the name of a file containing
+                the names of folders that ought to be searched. 
+
+                Currently, only  one @argument may be given. The code throws 
+                a warning and ignores they extra if additional args are present
+                after one beginning with an @. 
         """
-        if "-t" not in self.options:
-            return self.DEFAULT_TIMEOUT
+        path = student_dirs[0]
+        if path.startswith("@"):
+            if len(student_dirs) > 1:
+                self.log.warn("Inferring directory names from '%s', ignoring proceeding arguments %s" % (path, student_dirs[1:]))
+            path = path[1:]
+            inferred_student_dirs = []
+            if "/" in path:
+                # Strip from the last '/' to the end of the filepath
+                containing_folder = path[::-1].split("/", 1)[1][::-1]
+            else:
+                containing_folder = "."
+            with open(path, 'r') as f:
+                for dirname in f:
+                    inferred_student_dirs.append("%s/%s" % (containing_folder, dirname.strip()))
+            print "INFERRED = %s" % inferred_student_dirs
+            return inferred_student_dirs
         else:
-            timeoutStr = self.options['-t']
-            try: 
-                timeout = float(timeoutStr)
-                if timeout < 0: 
-                    raise ValueError
-                else:
-                    return timeout
-            except ValueError:
-                self.log.error("-t expected a postive number, received '%s'" % timeoutStr)
-                exit(1)
+            return student_dirs
 
 if __name__ == "__main__":
     # First, check the short-circuit options
@@ -228,6 +226,7 @@ if __name__ == "__main__":
         Main().print_version()
     elif "-h" in options or "--help" in options:
         Main().print_help()
-    else: # Run some tests
-        h = Main(*sys.argv)
-        h.run()
+    elif (len(sys.argv) < 2) or (sys.argv[0].startswith("-") and len(sys.argv) < 4): 
+        Main().print_usage()
+    else: 
+        Main().run(sys.argv[1:])
