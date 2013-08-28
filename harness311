@@ -4,6 +4,7 @@ import subprocess, sys, re, os
 from util.harness import Harness
 from util.invalidTestException import InvalidTestException
 from util.log import Log
+from util.noCompileException import NoCompileException
 from util.timer import Timer
 
 class Main(object):
@@ -46,9 +47,9 @@ class Main(object):
             if re.search(r"[\s]", test_name):
                 self.log.warn("Skipping test case '%s'. There should be no whitespace in filenames." % src_name)
             else:
-                src_nosuffix = test_name[:-(len("_test.ml"))]
-                sol_name = "%s_sol.ml" % src_nosuffix
-                src_name = "%s.ml" % src_nosuffix
+                module_name = test_name[:-(len("_test.ml"))]
+                sol_name = "%s_sol.ml" % module_name
+                src_name = "%s.ml" % module_name
                 sol = "%s/%s" % (sol_dir, sol_name)
                 if not os.path.exists(sol):
                     self.log.warn("Skipping test case '%s'. No matching implementation file found." % src_name)
@@ -65,7 +66,7 @@ class Main(object):
                         self.log.warn("Could not find student file '%s'" % impl_name)
                     else:
                         stu_dir = "/".join(matches[0].split("/")[:-1])
-                        output.append((src_name, sol_dir, stu_dir))
+                        output.append((module_name, sol_dir, stu_dir))
         return output
 
     def parse_args(self, args):
@@ -156,13 +157,14 @@ class Main(object):
         # We have tests! Start a timer and run them.
         error_messages = {}
         with Timer() as t:
-            for (src_name, sol_dir, stu_dir) in to_run:
+            for (name, sol_dir, stu_dir) in to_run:
                 try: 
-                    failures = Harness(src_name, sol_dir, stu_dir, self.timeout).run()
+                    failures = Harness(name, sol_dir, stu_dir, self.timeout).run()
                     if bool(failures):
                         # 2013-08-23: Something went wrong, better record it.
-                        test_name = src_name
-                        error_messages[test_name] = failures
+                        error_messages[name] = failures
+                except NoCompileException as e:
+                    error_messages[name] = [("NO COMPILE", e.message)]
                 except InvalidTestException as e:
                     # Optionally do something based on status code
                     pass

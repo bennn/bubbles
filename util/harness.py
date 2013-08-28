@@ -2,6 +2,7 @@ import os, re, subprocess
 
 from util.invalidTestException import InvalidTestException
 from util.log import Log
+from util.noCompileException import NoCompileException
 from util.timer import Timer
 from util.timedProcess import TimedProcess
 from util.timeoutException import TimeoutException
@@ -23,22 +24,27 @@ class Harness:
         "ocamltest.cma",
     ]
 
-    def __init__(self, src_name, sol_dir, stu_dir, timeout):
+    def __init__(self, module_name, sol_dir, stu_dir, timeout):
+        """
+            2013-08-28:
+                `module_name` should not have any suffix. 
+                Send 'fun' instead of 'fun.ml'.
+        """
         self.log = Log()
         self.timeout = timeout
 
+        self.module_name = module_name
         self.sol_dir = sol_dir
         self.stu_dir = stu_dir
 
-        self.src_name = src_name
-        self.src_nosuffix = src_name[:-(len(".ml"))]
-
-        self.sol_name = "%s_sol.ml" % self.src_nosuffix
-        self.sol_abs = "%s/%s" % (sol_dir, self.sol_name)
-        self.stu_abs = "%s/%s" % (stu_dir, src_name)
-
-        self.test_name = "%s_test.ml" % self.src_nosuffix
-        self.test_abs = "%s/%s" % (sol_dir, self.test_name)
+        # Absolute paths to library files
+        self.sol_ml = "%s/%s_sol.ml" % (sol_dir, self.module_name)
+        self.test_ml = "%s/%s_test.ml" % (sol_dir, self.module_name)
+        self.stu_ml = "%s/%s.ml" % (stu_dir, self.module_name)
+        # Absolute path to modules
+        self.sol_cma = "%s/%s_sol.cma" % (sol_dir, self.module_name)
+        self.test_cma = "%s/%s_test.cma" % (sol_dir, self.module_name)
+        self.stu_cma = "%s/%s.cma" % (stu_dir, self.module_name)
 
     def compile(self):
         """
@@ -51,19 +57,23 @@ class Harness:
                 Compile test file, generate interface
                 
                 Return directory to solution + student .cma and test.ml
+
+                TODO support compilation via makefile
         """
         base_command = " ".join(["ocamlc"] + self.LIBS +["-a", "-o"])
         # Someday, simplify this. Don't compile so often. WAIT maybe ocaml already
         # skips compiling if there are no changes.
         self.log.info("Compiling solution files...")
-        compile_sol = "%s %s/%s_sol.cma -g %s" % (base_command, self.sol_dir, self.src_nosuffix, self.sol_abs)
-        compile_stu = "%s %s/%s.cma -g %s" % (base_command, self.stu_dir, self.src_nosuffix, self.stu_abs)
-        # TODO nocompiling
-        compile_test = "%s %s/%s_test.cma -g -I %s -I %s %s" % \
-            (base_command, self.sol_dir, self.src_nosuffix, self.sol_dir, self.stu_dir, self.test_abs)
-        compile_test_suffix = "%s -I %s -I %s -c %s" % (" ".join(self.LIBS), self.sol_dir, self.stu_dir, self.test_abs)
-        # compile_test = "ocamlc %s" % compile_test_suffix
-        gen_interface = "ocamlc -i %s" % compile_test_suffix
+        compile_sol = "%s %s -g %s" % \
+            (base_command, self.sol_cma, self.sol_ml)
+        compile_stu = "%s %s -g %s" % \
+            (base_command, self.stu_cma, self.stu_ml)
+        compile_test = "%s %s -g -I %s -I %s %s" % \
+            (base_command, self.test_cma, self.sol_dir, self.stu_dir, self.test_ml)
+        # Extract the interface. This command does not produce library output
+        gen_interface = "ocamlc -i %s -I %s -I %s %s" % \
+            (" ".join(self.LIBS), self.sol_dir, self.stu_dir, self.test_ml)
+        # Run all three compilation commands
         for command in [compile_sol, compile_stu, compile_test]:
             try:
                 # Compile both files, then infer and return the interface
@@ -77,7 +87,7 @@ class Harness:
                 # Replace vanilla newlines with indented newlines.
                 nocompile_msg = ("%s\n%s" % (err_msg, sourceError)).replace("\n", "\n  ")
                 self.log.nocompile(nocompile_msg)
-                raise InvalidTestException(1)
+                raise NoCompileException(nocompile_msg)
         # Generate the interface
         try:
             interface = subprocess.check_output(gen_interface, shell=True)
@@ -111,7 +121,7 @@ class Harness:
             return None
         else:
             # Change "my_test.ml" to the module "My"
-            test_name = self.test_name[:-(len(".ml"))].capitalize()
+            test_name = "%s_test" % (self.module_name.capitalize())
             return ( (case, self._toplevel_input(test_name, case))
                 for case in test_cases )
         
@@ -121,7 +131,7 @@ class Harness:
                 Compile a test file, find the tests inside it, run each, record output
         """
         self._check_paths()
-        with self.log.TestFile(self.src_name):
+        with self.log.TestFile(self.module_name):
             # Compile the test + source files
             test_interface = self.compile()
             # Generate the test scripts
@@ -151,9 +161,9 @@ class Harness:
             "-I %s" % self.sol_dir,
             "-I %s" % self.stu_dir,
             ] + self.LIBS + [
-            "%s_sol.cma" % self.src_nosuffix,
-            "%s.cma" % self.src_nosuffix, 
-            "%s_test.cma" % self.src_nosuffix,
+            self.sol_cma,
+            self.stu_cma, 
+            self.test_cma,
         ])
         with Timer() as t:
             try:
@@ -186,13 +196,13 @@ class Harness:
             2013-08-23:
                 Make sure the source and test files (still) exist.
         """
-        if not os.path.exists(self.stu_abs):
+        if not os.path.exists(self.stu_ml):
             self.log.warn("Source file '%s' not found. Skipping %s..." % (self.src_name, self.test_name))
             raise InvalidTestException(0)
-        if not os.path.exists(self.sol_abs):
+        if not os.path.exists(self.sol_ml):
             self.log.warn("Solution file '%s' not found. Skipping %s..." % (self.sol_name, self.test_name))
             raise InvalidTestException(0)
-        if not os.path.exists(self.test_abs):
+        if not os.path.exists(self.test_ml):
             self.log.warn("Test file '%s' not found. Skipping it." % self.test_name)
             raise InvalidTestException(0)
 
