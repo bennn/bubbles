@@ -12,14 +12,17 @@ class Main(object):
     DEFAULT_TIMEOUT = 20
     github_url = "https://github.com/bennn/bubbles"
     log = Log()
+    pattern = ""
+    timeout = DEFAULT_TIMEOUT
     SUPPORTED_OPTIONS = {
         "-h" : "--help : Print this message, then exit.",
+        "-p" : "--pattern : Only run tests matching the supplied pattern. Trailing glob implied.",
         "-t" : "--timeout : Set the time limit (in seconds) for tests. Default is %s seconds." % DEFAULT_TIMEOUT,
         "-v" : "--version : Echo version number, then exit.",
     }
     version = "1.00"
 
-    def find_modules(self, student_dir):
+    def find_modules(self, student_dir, pattern):
         """
             2013-07-28:
                 First search `self.solution_dir` for test cases
@@ -30,13 +33,13 @@ class Main(object):
             "find", 
             self.solution_dir, 
             "-name", 
-            "'*_test.ml'"
+            "'%s*_test.ml'" % pattern,
         ])
         matchesStr = ""
         try:
             matchesStr = subprocess.check_output(find_command, shell=True)
         except subprocess.CalledProcessError as cpe:
-            self.log.error("Something went horribly wrong finding the solution files")
+            self.log.error("Something went horribly wrong finding the solution files located in %s" % self.solution_dir)
             exit(1)
         # Got solution tests, make sure matching files exist for each
         output = []
@@ -55,12 +58,17 @@ class Main(object):
                     self.log.warn("Skipping test case '%s'. No matching implementation file found." % src_name)
                 else:
                     # Find the student file, if exists
-                    find_command = " ".join(["find", student_dir, "-name", "'%s'" % src_name])
+                    find_command = " ".join([
+                        "find", 
+                        student_dir, 
+                        "-name", 
+                        "'%s'" % src_name
+                    ])
                     try:
                         matchesStr = subprocess.check_output(find_command, shell=True)
                         matches = matchesStr.split("\n")
                     except subprocess.CalledProcessError as cpe:
-                        self.log.error("Something went terribly wrong finding student file '%s'" % impl_name)
+                        self.log.error("Something went terribly wrong finding student file '%s'" % src_name)
                         exit(1)
                     if not matches:
                         self.log.warn("Could not find student file '%s'" % impl_name)
@@ -78,24 +86,26 @@ class Main(object):
                 Solution directory follows, then all student directories
 
         """
-        timeout = None
-        # Parse timeout
-        if args[0] == "-t" or args[0] == "--timeout":
-            if len(args) < 4:
+        if args[0].startswith("-"):
+            if args[0].startswith("--"):
+                collapsed = args[0][2]
+            else:
+                collapsed = args[0][1]
+            if collapsed == 'p':
+                self.pattern = self._parse_pattern(args[1])
+            elif collapsed == 't':
+                self.timeout = self._parse_timeout(args[1])
+            else:
+                self.log.warn("Unsupported option %s" % args[0])
+            return self.parse_args(args[2:])
+        else: 
+            try:
+                solution_dir = args[0]
+                student_dirs = args[1:]
+                return solution_dir, student_dirs
+            except IndexError:
                 self.print_usage()
                 exit(1)
-            try: 
-                timeout = float(args[1])
-                if timeout < 0: raise ValueError
-            except ValueError:
-                self.log.error("-t expected a postive number, received '%s'" % timeoutStr)
-                exit(1)
-            solution_dir = args[2]
-            student_dirs = args[3:]
-        else:
-            solution_dir = args[0]
-            student_dirs = args[1:]
-        return solution_dir, student_dirs, timeout
 
     def print_help(self):
         """
@@ -115,7 +125,7 @@ class Main(object):
             for k in sorted(self.SUPPORTED_OPTIONS.keys()))))
 
     def print_usage(self):
-        print("Usage: ocamltest [-t <timeout>] <solution-dir> <student-dir>")
+        print("Usage: harness311 [options] <solution-dir> <student-dir>")
 
     def print_version(self):
         """
@@ -137,7 +147,7 @@ class Main(object):
         # Make sure everything's installed well enough
         self._check_install()
         # TODO setting fields here is not good for clarity
-        self.solution_dir, student_dirs, self.timeout = self.parse_args(args)
+        self.solution_dir, student_dirs = self.parse_args(args)
         for student_dir in self._infer_student_directories(student_dirs):
             with self.log.Student(student_dir):
                 self.run_student(student_dir)
@@ -149,7 +159,7 @@ class Main(object):
                 Enter and exit could control printouts
         """
         # Find test files
-        to_run = list(self.find_modules(student_dir))
+        to_run = list(self.find_modules(student_dir, self.pattern))
         if not bool(to_run):
             # No tests, terminate early
             self.log.warn("Found 0 tests matching pattern")
@@ -228,6 +238,26 @@ class Main(object):
             return inferred_student_dirs
         else:
             return student_dirs
+
+    def _parse_pattern(self, pattern):
+        """
+            2013-08-30:
+                This is straightforward. The pattern is just a string. A prefix for a filename.
+                Not sure what an invalid one might be.
+        """
+        if pattern.startswith("/"):
+            self.log.error("Invalid pattern '%s'" % pattern)
+            exit(1)
+        return pattern
+
+    def _parse_timeout(self, timeout_str):
+        try: 
+            timeout = float(args[1])
+            if timeout < 0: raise ValueError
+        except ValueError:
+            self.log.error("-t expected a postive number, received '%s'" % timeout_str)
+            exit(1)
+        return timeout
 
 if __name__ == "__main__":
     # First, check the short-circuit options
