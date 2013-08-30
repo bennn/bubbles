@@ -8,7 +8,7 @@ def run(dirname):
             to solution files
     """
     for fname in glob.glob("%s/*.ml" % dirname):
-        if not fname.endswith("_test.ml"):
+        if not (fname.endswith("_test.ml") or fname.endswith("_sol.ml")):
             prefix = fname[:-(len(".ml"))]
             os.system("mv %s.ml %s_sol.ml" % (prefix, prefix))
 
