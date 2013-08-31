@@ -1,4 +1,6 @@
-import time
+from __future__ import print_function
+
+import re, subprocess, sys, time, os
 
 from util.termcolor import colored
 
@@ -29,13 +31,13 @@ class Log:
         print("* IF YOU WANT TO SUCCEED IN THIS CLASS YOUR CODE MUST COMPILE -mgn29 *")
         print("**********************************************************************")
         time.sleep(0.7)
-
+    
     def pprint_failures(self, error_messages, duration):
         self.failure("FAILURE in %0.3f seconds" % duration)
         for (module_name, errors) in error_messages.iteritems():
-            print(colored("%s" % module_name, color="red", attrs=["bold"]))
-            for (fn_name, err_msg) in errors:
-                self.failure("> %s - %s" % (fn_name, err_msg))
+            print(colored("%s.ml" % module_name, color="red", attrs=["bold"]))
+            for fail_tuple in errors:
+                self.failure("> %s - %s" % fail_tuple)
         self.failure("\n\"START TRAINING\nMAKE A COMEBACK!\"")
 
     def run(self, msg):
@@ -50,6 +52,7 @@ class Log:
     class Student:
         
         def __init__(self, filename, strip=True):
+            # 2013-08-30: Initialize a postscript stream, track every printout the test generates
             if strip:
                 self.student_name = filename.split("/")[-1]
             else:

@@ -5,6 +5,7 @@ from util.harness import Harness
 from util.invalidTestException import InvalidTestException
 from util.log import Log
 from util.noCompileException import NoCompileException
+from util.postscript import Postscript
 from util.timer import Timer
 
 class Main(object):
@@ -155,8 +156,6 @@ class Main(object):
     def run_student(self, student_dir):
         """
             2013-08-28:
-                TODO the 'with' syntax would be awesome here. 
-                Enter and exit could control printouts
         """
         # Find test files
         to_run = list(self.find_modules(student_dir, self.pattern))
@@ -168,17 +167,23 @@ class Main(object):
         error_messages = {}
         with Timer() as t:
             for (name, sol_dir, stu_dir) in to_run:
+                net_id = self._net_id(stu_dir)
+                output_stream = Postscript(net_id, name)
+                output_stream.write_code("%s/%s.ml" % (stu_dir, name))
+                failed = None
                 try: 
                     failures = Harness(name, sol_dir, stu_dir, self.timeout).run()
                     if bool(failures):
-                        # 2013-08-23: Something went wrong, better record it.
+                        output_stream.write_failures(failures)
                         error_messages[name] = failures
+                    else:
+                        output_stream.write_success()
                 except NoCompileException as e:
-                    error_messages[name] = [("NO COMPILE", e.message)]
+                    output_stream.write_nocompile(e.message)
+                    error_messages[name] = [("NO COMPILE", [e.message])]
                 except InvalidTestException as e:
                     # Optionally do something based on status code
                     pass
-        # TODO don't use header anymore. Delete it
         self.log.header("Summary of Results")
         if bool(error_messages):
             self.log.pprint_failures(error_messages, t.duration)
@@ -208,6 +213,12 @@ class Main(object):
                 "         moving 'ocamltest.cma', 'ocamltest.cmo', and 'ocamltest.cmi' to wherever your ocaml standard library files are stored.",
             ]))
             exit(1)
+            
+    def _net_id(self, filepath):
+        if "/" in filepath:
+            return filepath[::-1].split("/",1)[0][::-1]
+        else:
+            return filepath
 
     def _infer_student_directories(self, student_dirs):
         """
