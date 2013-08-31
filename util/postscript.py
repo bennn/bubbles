@@ -1,16 +1,16 @@
-import os
+import os, subprocess
 
 class Postscript:
     """
          2013-08-30:
-             Wrapper for creating postscript documents. 
-             Right now it's very simple. Later it'll use subprocess like it ought.
+             Simple wrapper for writing postscript documents. 
+             Nothing too special, mostly send over the arguments directly and this file
+             takes care of the fonts and the particulars of writing the doc.
     """
 
     NORMAL_FONT = "Palatino-Roman10"
     HEADER_FONT = "Palatino-Bold10"
     CODE_FONT = "Courier-New10"
-    
 
     def __init__(self, net_id, module_name, output_home="./output"):
         if not os.path.exists(output_home):
@@ -32,10 +32,7 @@ class Postscript:
             '--escapes=\001',
             '--no-formfeed',
         ])
-        # self.enscript_process = subprocess.Popen(enscript_command, shell=True)
-        # self.enscript_process = os.popen(enscript_command)
-        # return self.enscript_process.stdin
-        self.enscript_stream = os.popen(enscript_command, 'w')
+        self.enscript_stream = subprocess.Popen(enscript_command, shell=True, stdin=subprocess.PIPE).stdin
 
     def change_font(self, font):
         self.enscript_stream.write("\n\001font{%s}" % font)
