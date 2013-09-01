@@ -218,6 +218,7 @@ class Harness:
                 Get the line number and source file that spawned `errorMessage`,
                 extract that line of code from that source file.
         """
+        errorMessage = str(errorMessage, encoding='utf-8')
         match = re.search(r"File \"(.*?)\", line ([0-9]+),", errorMessage)
         if match is None:
             return ""
