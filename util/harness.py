@@ -60,7 +60,7 @@ class Harness:
             subprocess.check_output(compile_all, shell=True, stderr=subprocess.STDOUT)
             # 2013-08-23: Reached this line without making a .cmo Dear diary, this was bad
             interface = subprocess.check_output(infer_interface, shell=True)
-            return interface.split("\n")
+            return str(interface, encoding='utf-8').split("\n")
         except subprocess.CalledProcessError as cpe:
             # NO COMPILEEEEEEEE
             err_msg = cpe.output.strip()
@@ -197,6 +197,7 @@ class Harness:
                 Added logic to print the non-exception printouts
                 You know, we could probably just check that the output's "- : unit"
         """
+        toplevel_output = str(toplevel_output, encoding='utf-8')
         match = re.search(r"#.*?(Exception:[\s].*)\n#", toplevel_output, re.DOTALL)
         if match is not None:
             # Debug output will be octothorp to exception.

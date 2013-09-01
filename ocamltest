@@ -33,7 +33,7 @@ class Main(object):
         try:
             matchesStr = subprocess.check_output(find_command, shell=True, stderr=subprocess.STDOUT)
             matches = []
-            for m in matchesStr.split("\n"):
+            for m in str(matchesStr, encoding='utf-8').split("\n"):
                 # 2013-08-23: We're only concerned with test files. `xxx_test.ml`
                 if m.endswith("_test.ml"):
                     filename = m.split("/")[-1]
