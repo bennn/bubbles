@@ -148,13 +148,12 @@ class Main(object):
         # Make sure everything's installed well enough
         self._check_install()
         solution_dir, student_dirs = self.parse_args(args)
-        grades_table = CmsGradesTable()
-        for student_dir in self._infer_student_directories(student_dirs):
-            net_id = self._net_id(student_dir)
-            with self.log.Student(student_dir):
-                errors = self.run_student(solution_dir, student_dir, net_id)
-                grades_table.update(net_id, errors)
-        grades_table.export()
+        with CmsGradesTable("./output/grading_comments.csv") as cms:
+            for student_dir in self._infer_student_directories(student_dirs):
+                net_id = self._net_id(student_dir)
+                with self.log.Student(student_dir):
+                    errors = self.run_student(solution_dir, student_dir, net_id)
+                    cms.update(net_id, errors)
             
     def run_student(self, solution_dir, student_dir, net_id):
         """

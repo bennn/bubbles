@@ -6,7 +6,7 @@ class CmsGradesTable:
             Abstraction for posting test harness output to CMS
     """
 
-    def __init__(self):
+    def __init__(self, filename):
         """
             2013-09-01:
                 Create the grades table.
@@ -15,9 +15,16 @@ class CmsGradesTable:
 
                 Later, this should probably take a file name as the first argument
         """
+        self.filename = filename
         self.table = [
             ["NetID","Grade","Add Comments"],
         ]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.export()
 
     def add_comment(self, net_id, comment):
         self.table.append([net_id, "", comment])
@@ -27,9 +34,7 @@ class CmsGradesTable:
             2013-09-01:
                 Create a .csv file ready to upload to CMS
         """
-        if not os.path.exists("./output"):
-            os.mkdir("./output")
-        with open("./output/grading_comments.csv", 'w') as f:
+        with open(self.filename, 'w') as f:
             for row in self.table:
                 print>>f, ",".join(row)
 
