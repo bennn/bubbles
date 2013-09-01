@@ -14,7 +14,7 @@ let assert_greater v1 v2 =
   | true -> ()
   | false -> 
     raise (Assert_greater (Printf.sprintf 
-      "%s is not greater than %s" (Dump.dump v1) (Dump.dump v2)))
+      "%s is not greater than %s" (Dump.truncate v1) (Dump.truncate v2)))
 
 exception Assert_less of string
 let assert_less v1 v2 = 
@@ -22,7 +22,7 @@ let assert_less v1 v2 =
   | true -> ()
   | false -> 
     raise (Assert_less (Printf.sprintf 
-      "%s is not less than %s" (Dump.dump v1) (Dump.dump v2)))
+      "%s is not less than %s" (Dump.truncate v1) (Dump.truncate v2)))
 
 exception Assert_equal of string
 let assert_equal v1 v2 = 
@@ -30,7 +30,7 @@ let assert_equal v1 v2 =
   | true -> ()
   | false -> 
     raise (Assert_equal (Printf.sprintf 
-      "%s is not equal to %s" (Dump.dump v1) (Dump.dump v2)))
+      "%s is not equal to %s" (Dump.truncate v1) (Dump.truncate v2)))
 
 exception Assert_not_equal of string
 let assert_not_equal v1 v2 = 
@@ -38,7 +38,7 @@ let assert_not_equal v1 v2 =
   | true -> ()
   | false -> 
     raise (Assert_not_equal (Printf.sprintf 
-      "%s is equal to %s" (Dump.dump v1) (Dump.dump v2)))
+      "%s is equal to %s" (Dump.truncate v1) (Dump.truncate v2)))
 
 exception Assert_is of string
 let assert_is v1 v2 =
@@ -46,7 +46,7 @@ let assert_is v1 v2 =
   | true -> ()
   | false -> 
     raise (Assert_is (Printf.sprintf 
-      "%s is not identical to %s" (Dump.dump v1) (Dump.dump v2)))
+      "%s is not identical to %s" (Dump.truncate v1) (Dump.truncate v2)))
 
 exception Assert_is_not of string
 let assert_is_not v1 v2 =
@@ -54,14 +54,14 @@ let assert_is_not v1 v2 =
   | true -> ()
   | false -> 
     raise (Assert_is_not (Printf.sprintf 
-      "%s is the same as %s" (Dump.dump v1) (Dump.dump v2)))
+      "%s is the same as %s" (Dump.truncate v1) (Dump.truncate v2)))
 
 exception Assert_is_none of string
 let assert_is_none = function
 | None -> ()
 | Some x -> 
   raise (Assert_is_none (Printf.sprintf 
-    "Some %s is not None" (Dump.dump x)))
+    "Some %s is not None" (Dump.truncate x)))
 
 exception Assert_is_not_none of string
 let assert_is_not_none = function
