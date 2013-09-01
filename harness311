@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import subprocess, sys, re, os
 
+from util.cmsGradesTable import CmsGradesTable
 from util.harness import Harness
 from util.invalidTestException import InvalidTestException
 from util.log import Log
@@ -85,7 +86,6 @@ class Main(object):
 
                 The timeout should be the first argument, if it exists.
                 Solution directory follows, then all student directories
-
         """
         if args[0].startswith("-"):
             if args[0].startswith("--"):
@@ -148,11 +148,15 @@ class Main(object):
         # Make sure everything's installed well enough
         self._check_install()
         solution_dir, student_dirs = self.parse_args(args)
+        grades_table = CmsGradesTable()
         for student_dir in self._infer_student_directories(student_dirs):
+            net_id = self._net_id(student_dir)
             with self.log.Student(student_dir):
-                self.run_student(solution_dir, student_dir)
+                errors = self.run_student(solution_dir, student_dir, net_id)
+                grades_table.update(net_id, errors)
+        grades_table.export()
             
-    def run_student(self, solution_dir, student_dir):
+    def run_student(self, solution_dir, student_dir, net_id):
         """
             2013-08-28:
         """
@@ -164,9 +168,9 @@ class Main(object):
             return
         # We have tests! Start a timer and run them.
         error_messages = {}
+        # TODO this should be a test context. Create a new enscript file, time it, etc
         with Timer() as t:
             for (name, sol_dir, stu_dir) in to_run:
-                net_id = self._net_id(stu_dir)
                 output_stream = Postscript(net_id, name)
                 output_stream.write_code("%s/%s.ml" % (stu_dir, name))
                 failed = None
@@ -188,6 +192,7 @@ class Main(object):
             self.log.pprint_failures(error_messages, t.duration)
         else: 
             self.log.success("ALL TESTS PASS in %0.3f seconds" % t.duration)
+        return error_messages
 
     def _check_install(self):
         """
