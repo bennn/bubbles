@@ -1,0 +1,19 @@
+#!/usr/bin/env python
+import glob, os, sys
+
+def run(dirname):
+    """
+        2013-08-30:
+            Given the name of a directory, rename all non-test .ml files
+            to solution files
+    """
+    for fname in glob.glob("%s/*.ml" % dirname):
+        if not (fname.endswith("_test.ml") or fname.endswith("_sol.ml")):
+            prefix = fname[:-(len(".ml"))]
+            os.system("mv %s.ml %s_sol.ml" % (prefix, prefix))
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: run <directory-name>")
+    else:
+        run(sys.argv[1])
