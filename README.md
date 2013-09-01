@@ -1,141 +1,52 @@
-bubbles
-=======
-A simple test harness in ocaml. Give it a solutions + tests directory, source directory, and lett'er rip.
+Test Harness
+===========
 
-Disclaimer
-----------
-* This project requires <a href="http://www.gnu.org/software/make/">gnumake</a>
-* This project requires Python 2.7
-* This project requires OCaml. It has been developed with 4.00 but probably works with 3.12.
-* This project does not currently support the testing of files with dependancies. That's coming soon, I promise you, but it's not here today.
-* This project does not work on Windows. Sorry.
+Install
+-------
+Run `make install` with root permissions.
 
-Core Philosophy
----------------
-Writing unit tests should be easy.
-Extremely easy.
-A simple test script should be as easy to write as a simple module; there should be a minimum of boilerplate involved.
-Once I've written a module, I want to be able to write a few unit tests run them all with a few keystrokes.
-
-How does it work?
------------------
-The `ocamltest` executable searches for modules ending with `_test.ml`.
-Within those files, it searches for `unit -> unit` functions that begin with the prefix `test_` and then runs each testcase in a separate environment.
-That's all you need to start testing: a script and a `_test.ml` script.
-
-Installation
-------------
-1. Clone the repository 
-    `git clone https://github.com/bennn/bubbles.git`
-2. Run `make install`. You will likely need root permissions
-3. (Optional) Set the `OCAMLTEST_HOME` environment variable to the root folder of whatever project you want to run tests in.
-
-Uninstallation
---------------
+Uninstall
+---------
 Run `make uninstall` with root permissions.
 
-Usage
------
-1. Make a simple module. Let's pretend its called `mymodule.ml`. 
-2. Make a test file `mymodule_test.ml`. The `_test` suffix is important!
-   Test file should contain `unit -> unit` functions with the prefix `test_`. These are the test cases. Other functions and modules may be defined inside the test file, but those will not be executed as part of the suite.
-3. Run `ocamltest mymodule` and hope for the best.
+How to write a test harness
+---------------------------
+* Create solution files
+  - Make a directory to hold the solutions. Call it whatever you like, but `solution` is a good name
+  - Name all solutions with the `_test` suffix. For instance if you want to test the module `part1.ml`, the solution file should be named `part1_sol.ml`. This is pretty important
+  - Write test cases. Make sure to name them with the `_sol` suffix. For instance `part1_test.ml` is the right name to test `part1.ml`.
+    + See the section below on writing good test cases
+* Make a directory to hold the students' submissions. `Submissions` is preferred because that's what CMS will give you automatically if you navigate to the 'groups' page for the assignment, select all students (use the 'All' button on top), and click the 'Files' button.
+  - Make sure every student's files are in a new folder. The folder really really really should be named with the student's netid. Really.
+  - Student files don't need a particular suffix, or even need to be located in a particular place. You can put `part1.ml` directly under the student's netid directory or 10 folders deep it doesn't matter.
+* Run the harness with the `harness311` command. 
+  - Assume we have folders `solution` and `Submissions`. Then you can run the harness via `harness311 solution Submissions/*`
+    + The first argument to `harness311` must be the solutions directory. This directory should have the `_sol.ml` and `_test.ml` files.
+    + The following arguments to `harness311` should be student directories to run the tests on. You can give as many arguments as you like. 
+  - ALTERNATIVELY, run the command `harness311 solution @Submissions/netids`
+    + The `@` character at the start of a student folder indicates that the argument is not a folder but rather a list of folders that should be run. Ideally, a list of netids. You can generate such a file real easy by:
+      - Download the `Submissions` folder
+      - `cd Submissions`
+      - `ls -1 * > netids`
+    + BOOM! Now you can `cd ..; harness311 solution @Submissions/netids`
+* Set a timeout with the `-t` or `--timeout` options. Example: `harness311 -t 1 solution @Submissions/netids` runs the harness with a one-second timeout. The default timeout is 20 seconds.
+* By default, `harness311` runs all the tests in the solutions directory. Instead, you can specify which tests to run by giving a pattern with the `-p` or `--pattern` options. Example: if there exist tests `solution/part1_test.ml`, `solution/part2_test.ml` and `solution/part3_test.ml`, running `harness311 -p part3 solution @Submissions/netids` will execute the test harness for `part3.ml` and NOT for `part1` or `part2`.
 
-Example
--------
-The simplest possible test suite can be made as follows:
-```
-touch fun.ml
-echo "let test\_one () = assert true" | fun_test.ml
-```
-
-A slightly more useful version of `fun_test.ml` would import `fun.ml` and the standard testing library, `ocamltest.cma`:
-```
-open Fun
-open Ocamltest
-
-let test\_one () = assert_true true
-```
-
-But these aren't too instructive.
-Let's make a tiny lists library and run some tests on it.
-First, we write the source code:
-##### my_lists.ml #####
-```
-let length = function [] -> 0 | _::t -> 1 + length t
-```
-
-Cool cool. That's a good start. Next, we write a test for our new module:
-##### my_lists_test.ml #####
+How to write a test case
+------------------------
+Here's an example simple test case `module_test.ml`:
 ```
 open Ocamltest
 
-module M = My_lists
-
-module State = struct
-  let xs = [1;2;3]
-  let ys = [1;2;3;4]
-end
-
-let test_length1 () =
-  assert_less (M.length [1;2]) 3
-
-let test_length2 () = 
-  assert_greater 3 (M.length [1;2])
-
-let test_length3 () = 
-  assert_equal (M.length State.ys) (1 + M.length State.xs)
-
-let helper xss = List.hd xss
-
-let test_length4 () = 
-  let mylist = [[1; 2]] in
-  assert_greater (M.length (helper mylist))  (M.length mylist)
+let test_fun1 () =
+  assert_equal (Module.fun1 ()) (Module_sol.fun1 ())
 ```
-
-Now we can run the tests:
-
-`ocamltest my_lists`
-
-and party. "ALL TESTS PASS"
-
-Explanation
------------
-There's a bit going on in `my_lists_test.ml`, so let's break that down:
-* The first line, `module M = My_lists`, imports the source code into the local namespace. It permits us to call the functions we want to test.
-* The module starting at the second line, `module State = struct` creates shared state for the test cases. Lists `xs` and `ys` are defined once, here, and can be used in any number of tests later in the file. This is __by convention__. See the section on __Shared State__ for an explanation.
-* Functions `test_length1` through `test_length4` are the test cases. Those get run. Their output decides wheter the suite passed or failed.
-* `helper` is an auxillary function, defined for convenience right smack in the middle of the file. It is ignored by the harness, but `test_length4` uses it. Note that this function may not be called by test 1 through 3, because it (`helper`) was not in scope when they (tests 1 - 3) were defined.
-
-Shared State
-------------
-If you'd like to define variables for the test cases to access, just declare them before you declare the test case. Test modules are compiled just like any other, from top to bottom. Preferred convention is to keep all your helpers and variables inside a module defined at the very top of the test file. This way, the variables are easy to locate within a test file and _all_ test test cases can access them.
-
-There no support for referencing external modules. The `State` module or its equivalents, if you choose to define them, __must__ exist within either the source code or the test file.
-
-Globbing
---------
-You can supply ocamltest with a pattern instead of a module name. Say you have a directory with the following four files: `module1.ml`, `module2.ml`, `module1_test.ml`, `module2_test.ml`.
-
-Running `ocamltest 'module*'` inside this directory will execute the harnesses `module1_test.ml` and `module2_test.ml`. (The quotes might matter, depends on which shell you use.)
-Actually, you can do even better. Leading and trailing asterisks are implicit, so the following patterns achieve the same results:
-
-* `ocamltest module`
-* `ocamltest mod`
-* `ocamltest ule`
-* `ocamltest 'od*l'`
-
-You get the idea. Be careful getting too lazy if you have lots of test files around and don't want to run 'em all. Or don't be careful and just run all the tests all the time.
-This pattern matching is maybe a bit too eager. Let me know if you hate it.
-
-Finding Test Files
-------------------
-
-By default, `ocamltest mymodule` searches for files matching the pattern "mymodule" in the current working directory and its containing folders. You can change this behavior. 
-`ocamltest -d <dirname> mymodule` starts the search in the directory `dirname`, instead of the current directory. The `--directory` option does the same thing. Also, you can set the environment variable `OCAMLTEST_HOME`, which causes the harness to search from that directory instead of the current one. It's like running `ocamltest -d $OCAMLTEST_HOME mymodule`, just with less typing.
+Notes:
+* Opening `Ocamltest` is important. That gives you access to the assertions library `ocamltest.ml`. 
+* Since the test is named `module_test.ml`, the solution file `module_sol.ml` and student file `module.ml` are linked during compilation. So you can call the solution and student modules no problem.
 
 - - -
 
 _Author_: Ben Greenman
 
-_Last Updated_: 2013-08-26
+_Last Updated_: 2013-09-01
