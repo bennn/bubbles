@@ -23,16 +23,16 @@ class Main(object):
     }
     version = "1.00"
 
-    def find_modules(self, student_dir, pattern):
+    def find_modules(self, solution_dir, student_dir, pattern):
         """
             2013-07-28:
-                First search `self.solution_dir` for test cases
+                First search `solution_dir` for test cases
                 Ensure that matching implementation files exist (weakly assure)
                 Finally search `student_dir` for matching implementation files
         """
         find_command = " ".join([
             "find", 
-            self.solution_dir, 
+            solution_dir, 
             "-name", 
             "'%s*_test.ml'" % pattern,
         ])
@@ -40,7 +40,7 @@ class Main(object):
         try:
             matchesStr = subprocess.check_output(find_command, shell=True)
         except subprocess.CalledProcessError as cpe:
-            self.log.error("Something went horribly wrong finding the solution files located in %s" % self.solution_dir)
+            self.log.error("Something went horribly wrong finding the solution files located in %s" % solution_dir)
             exit(1)
         # Got solution tests, make sure matching files exist for each
         output = []
@@ -147,18 +147,17 @@ class Main(object):
         """
         # Make sure everything's installed well enough
         self._check_install()
-        # TODO setting fields here is not good for clarity
-        self.solution_dir, student_dirs = self.parse_args(args)
+        solution_dir, student_dirs = self.parse_args(args)
         for student_dir in self._infer_student_directories(student_dirs):
             with self.log.Student(student_dir):
-                self.run_student(student_dir)
+                self.run_student(solution_dir, student_dir)
             
-    def run_student(self, student_dir):
+    def run_student(self, solution_dir, student_dir):
         """
             2013-08-28:
         """
         # Find test files
-        to_run = list(self.find_modules(student_dir, self.pattern))
+        to_run = list(self.find_modules(solution_dir, student_dir, self.pattern))
         if not bool(to_run):
             # No tests, terminate early
             self.log.warn("Found 0 tests matching pattern")
