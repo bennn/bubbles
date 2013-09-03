@@ -69,15 +69,18 @@ let assert_is_not_none = function
 | Some _ -> ()
 
 exception Assert_raises of string
-let assert_raises expr ex : unit = 
+let assert_raises ex_opt f arg : unit = 
+  let error_str = match ex_opt with  
+    | None -> "Forcing expression did not raise an exception"
+    | Some ex -> (Printf.sprintf "Forcing expression did not raise %s" (Printexc.to_string ex))
+  in
   try 
     begin
-      let _ = Lazy.force expr in raise (Assert_raises (Printf.sprintf
-      "Forcing expression did not raise %s" (Printexc.to_string ex)))
+      let _ = f arg in raise (Assert_raises error_str)
     end 
   with 
     | Assert_raises _ as e -> raise e
-    | e when e = ex -> ()
+    | e when ex_opt = None -> ()
+    | e when ex_opt = Some e -> ()
     | e -> raise (Assert_raises (Printf.sprintf 
       "Forcing the expression raised unexpected exception %s" (Printexc.to_string e)))
-  
