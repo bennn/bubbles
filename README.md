@@ -3,6 +3,14 @@ bubbles
 A simple unit testing framework for OCaml.
 It's slowly coming into its own.
 
+Very slowly, unfortunately. 
+Development is at a virtual standstill.
+Sort of.
+I am not maintaining _this_ project, but am working on a testing framework for <a href="https://github.com/organizations/cs3110">CS3110</a> at Cornell. 
+That's a framework for testing student code against a master set of solutions.
+I've been extending this framework and revising it in that context, and I plan to some day do a big update drawing in all the changes from there over here.
+What stopped me so far is that I haven't thought of a nice way of integrating the two usages: master vs. dev and unit testing. 
+
 Disclaimer
 ----------
 * This project requires <a href="http://www.gnu.org/software/make/">gnumake</a>
@@ -10,6 +18,7 @@ Disclaimer
 * This project requires OCaml. It has been developed with 4.00 but probably works with 3.12.
 * This project does not currently support the testing of files with dependancies. That's coming soon, I promise you, but it's not here today.
 * This project does not work on Windows. Sorry.
+* This project is not currently maintained. 
 
 Core Philosophy
 ---------------
