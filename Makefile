@@ -4,13 +4,13 @@ clean:
 	find . -name '*.cma' | xargs rm
 
 install:
-	ocamlc -g -o dump.cma -a dump.ml
-	echo `ocamlc -where` | xargs cp dump.* 
-	ocamlc -g -o ocamltest.cma -a ocamltest.ml
-	echo `ocamlc -where` | xargs cp ocamltest.* 
+	ocamlc -g -o serializer.cma -a serializer.ml
+	echo `ocamlc -where` | xargs cp serializer.* 
+	ocamlc -g -o assertions.cma -a assertions.ml
+	echo `ocamlc -where` | xargs cp assertions.* 
 	ln -s `pwd`/ocamltest /usr/local/bin/ocamltest
 
 uninstall:
-	echo `ocamlc -where`/dump.* | xargs rm 
-	echo `ocamlc -where`/ocamltest.* | xargs rm 
+	echo `ocamlc -where`/serializer.* | xargs rm 
+	echo `ocamlc -where`/assertions.* | xargs rm 
 	rm /usr/local/bin/ocamltest

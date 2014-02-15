@@ -6,7 +6,7 @@ from util.timer import Timer
 from util.timedProcess import TimedProcess
 from util.timeoutException import TimeoutException
 
-class Harness:
+class RunTest:
     """
         2013-08-23:
             Execute all tests cases found inside a module. Specifically:
