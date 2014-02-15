@@ -42,6 +42,7 @@ let assert_not_equal v1 v2 =
 
 exception Assert_almost_equal of string
 let assert_almost_equal v1 v2 =
+  let epsilon = 0.000001 in
   match (abs_float(v1 -. v2) <= epsilon) with
   | true -> ()
   | false -> 

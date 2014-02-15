@@ -1,3 +1,5 @@
+OCAMLC_HOME=`ocamlc -where`
+
 clean:
 	find . -name '*.cmi' | xargs rm
 	find . -name '*.cmo' | xargs rm
@@ -5,12 +7,12 @@ clean:
 
 install:
 	ocamlc -g -o serializer.cma -a serializer.ml
-	echo `ocamlc -where` | xargs cp serializer.* 
+	cp serializer.cma serializer.cmi serializer.cmo ${OCAMLC_HOME}
 	ocamlc -g -o assertions.cma -a assertions.ml
-	echo `ocamlc -where` | xargs cp assertions.* 
+	cp assertions.cma assertions.cmi assertions.cmo ${OCAMLC_HOME}
 	ln -s `pwd`/ocamltest /usr/local/bin/ocamltest
 
 uninstall:
-	echo `ocamlc -where`/serializer.* | xargs rm 
-	echo `ocamlc -where`/assertions.* | xargs rm 
+	rm ${OCAMLC_HOME}/serializer.cma ${OCAMLC_HOME}/serializer.cmi ${OCAMLC_HOME}/serializer.cmo
+	rm ${OCAMLC_HOME}/assertions.cma ${OCAMLC_HOME}/assertions.cmi ${OCAMLC_HOME}/assertions.cmo
 	rm /usr/local/bin/ocamltest
