@@ -22,10 +22,6 @@ class Log:
 
     def nocompile(self, msg):
         print(colored("Compilation Failed:\n  %s" % msg, color="red"))
-        print("**********************************************************************")
-        print("* IF YOU WANT TO SUCCEED IN THIS CLASS YOUR CODE MUST COMPILE -mgn29 *")
-        print("**********************************************************************")
-        time.sleep(0.7)
 
     def pprint_failures(self, error_messages, duration):
         self.failure("FAILURE in %0.3f seconds" % duration)
