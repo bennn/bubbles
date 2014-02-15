@@ -1,31 +1,33 @@
 bubbles
 =======
 A simple unit testing framework for OCaml.
-It's slowly coming into its own.
+It's a modest little package.
 
-Very slowly, unfortunately. 
-Development is at a virtual standstill.
-Sort of.
-I am not maintaining _this_ project, but am working on a testing framework for <a href="https://github.com/organizations/cs3110">CS3110</a> at Cornell. 
-That's a framework for testing student code against a master set of solutions.
-I've been extending this framework and revising it in that context, and I plan to some day do a big update drawing in all the changes from there over here.
-What stopped me so far is that I haven't thought of a nice way of integrating the two usages: master vs. dev and unit testing. 
+`ocamltest`, the executable, handles files without dependencies very well.
+It provided the basis for the Fall 2013 test harness for CS3110 after a few modifications (see the harness branch), but never really succeeded at compiling large OCaml projects.
+Still, I'm happy with it; using the script is as easy as I wanted it to be.
+
+CS 3110 has since migrated to an [ocamlbuild](http://brion.inria.fr/gallium/index.php/Ocamlbuild)/[pa\_ounit](https://github.com/janestreet/pa_ounit) based test harness.
+That project has its own github page, found [here](https://github.com/cs3110/tools/tree/master/cs3110-cli).
+One day this project may migrate to ocamlbuild, but I think I'll leave it as-is.
+My focus is on maintaining the CS 3110 tools.
 
 Disclaimer
 ----------
 * This project requires <a href="http://www.gnu.org/software/make/">gnumake</a>
 * This project requires Python 2.7
-* This project requires OCaml. It has been developed with 4.00 but probably works with 3.12.
-* This project does not currently support the testing of files with dependancies. That's coming soon, I promise you, but it's not here today.
+* This project requires OCaml. It has been developed with 4.01.0 but probably works with 3.12.
+* This project does not currently support the testing of files with dependancies.
 * This project does not work on Windows. Sorry.
-* This project is not currently maintained. 
 
 Core Philosophy
 ---------------
-Writing unit tests should be easy.
-Extremely easy.
-A simple test script should be as easy to write as a simple module; there should be a minimum of boilerplate involved.
-Once I've written a module, I want to be able to write a few unit tests run them all with a few keystrokes.
+Writing and running unit tests should be easy.
+That's really all this project is about.
+
+Under this framework, you only need to write complimentary `_test` modules to your main code and define test functions within them.
+Every test in a test module is run in an isolated toplevel environment.
+All the finding, compiling, timeouts, and logging is taken care of.
 
 How does it work?
 -----------------
@@ -148,4 +150,4 @@ By default, `ocamltest mymodule` searches for files matching the pattern "mymodu
 
 _Author_: Ben Greenman
 
-_Last Updated_: 2013-08-26
+_Last Updated_: 2014-02-15
