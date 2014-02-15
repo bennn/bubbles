@@ -1,9 +1,13 @@
-#!/usr/bin/env python
-import subprocess, sys, re, os
+#!/usr/bin/env python2.7
+import sys
+import re
+import os
 
-from util.runTest import RunTest
 from util.invalidTestException import InvalidTestException
 from util.log import Log
+from util.noCompileException import NoCompileException
+from util.runTest import RunTest
+from util.subprocessWrapper import SubprocessWrapper
 from util.timer import Timer
 
 class Main(object):
@@ -19,6 +23,7 @@ class Main(object):
     version = "1.00"
 
     def __init__(self, *args):
+        self.subprocess = SubprocessWrapper()
         self.log = Log()
         self.pattern = ""
         self.options = self._options(args[1:])
@@ -30,22 +35,21 @@ class Main(object):
                 modules matching `pattern`
         """
         find_command = " ".join(["find", directory, "-name", "'*%s*.ml'" % pattern])
-        try:
-            matchesStr = subprocess.check_output(find_command, shell=True, stderr=subprocess.STDOUT)
-            matches = []
-            for m in matchesStr.split("\n"):
-                # 2013-08-23: We're only concerned with test files. `xxx_test.ml`
-                if m.endswith("_test.ml"):
-                    filename = m.split("/")[-1]
-                    if re.search(r"[\s]", filename):
-                        # 2013-08-26: Whitespace in a module name is invalid anyway.
-                        self.log.warn("Skipping test case '%s'. There should be no whitespace in filenames." % filename)
-                    else:
-                        matches.append(m)
-            return matches
-        except subprocess.CalledProcessError as cpe:
-            self.log.error("%s  Make certain environment variable OCAMLTEST_HOME is set to a valid folder on your file system." % cpe.output)
-            exit(1)
+        matchesStr = self.subprocess.execute(find_command, on_failure=self.not_found)
+        matches = []
+        for m in matchesStr.split("\n"):
+            # 2013-08-23: We're only concerned with test files. `xxx_test.ml`
+            if m.endswith("_test.ml"):
+                filename = m.split("/")[-1]
+                if re.search(r"[\s]", filename):
+                    # 2013-08-26: Whitespace in a module name is invalid anyway.
+                    self.log.warn("Skipping test case '%s'. There should be no whitespace in filenames." % filename)
+                else:
+                    matches.append(m)
+        return matches
+
+    def not_found(self, cpe):
+        self.log.error("%s  Make certain environment variable OCAMLTEST_HOME is set to a valid folder on your file system." % cpe.output)
 
     def print_help(self):
         """
@@ -98,6 +102,8 @@ class Main(object):
                         # 2013-08-23: Something went wrong, better record it.
                         test_name = test_file.split("/")[-1][:-(len(".ml"))]
                         error_messages[test_name] = failures
+                except NoCompileException as e:
+                    error_messages[test_file] = [("Compilation Failed", e.message)]
                 except InvalidTestException as e:
                     # Optionally do something based on status code
                     pass
@@ -120,7 +126,7 @@ class Main(object):
                 - ocamltest.ml is installed wherever ocamlc expects to find it
         """
         ocamltest_files = ['ocamltest.cma', 'ocamltest.cmi', 'ocamltest.cmo']
-        find_files = ( subprocess.check_output("find `ocamlc -where` -name '%s'" % fname, shell=True)
+        find_files = ( self.subprocess.execute("find `ocamlc -where` -name '%s'" % fname)
             for fname in ocamltest_files )
         if not (len(ocamltest_files) == len([x for x in find_files if x])):
             self.log.error("\n".join([
