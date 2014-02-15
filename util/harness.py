@@ -19,8 +19,8 @@ class Harness:
 
     # In order of dependence
     LIBS = [
-        "dump.cma",
-        "ocamltest.cma",
+        "serializer.cma",
+        "assertions.cma",
     ]
 
     def __init__(self, test_file, timeout):

@@ -97,4 +97,9 @@ let rec dump r =
     | _ ->
       opaque (Printf.sprintf "unknown: tag %d size %d" t s)
 
-let dump v = dump (Obj.repr v)
+let serialize v = dump (Obj.repr v)
+let truncate v = 
+  let dumped = serialize v in
+  if String.length dumped < 100 
+  then dumped 
+  else String.sub dumped 0 100 ^ "... (truncated to save trees!)"
