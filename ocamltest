@@ -233,7 +233,8 @@ if __name__ == "__main__":
         Main().print_version()
     elif "-h" in options or "--help" in options:
         Main().print_help()
-    else: # Run some tests
+    else:
+        # Run some tests
         if len(sys.argv) == 1:
             # 2013-08-23: No arguments = run all tests
             sys.argv.append("")

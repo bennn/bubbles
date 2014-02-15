@@ -68,6 +68,7 @@ let assert_is_not_none = function
 | None -> raise (Assert_is_not_none "expected Something, got None")
 | Some _ -> ()
 
+(* I guess a list of arguments is the way ta go. *)
 exception Assert_raises of string
 let assert_raises ex_opt f arg : unit = 
   let error_str = match ex_opt with  
