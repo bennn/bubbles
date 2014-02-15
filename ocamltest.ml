@@ -32,6 +32,15 @@ let assert_equal v1 v2 =
     raise (Assert_equal (Printf.sprintf 
       "%s is not equal to %s" (Dump.truncate v1) (Dump.truncate v2)))
 
+exception Almost_equal of string
+let almost_equal v1 v2 =
+  let epsilon = 0.0001 in
+  match (v1 -. v2 <= epsilon) with
+  | true -> ()
+  | false -> 
+    raise (Almost_equal (Printf.sprintf 
+      "%s is not almost equal to %s" (Dump.truncate v1) (Dump.truncate v2)))
+
 exception Assert_not_equal of string
 let assert_not_equal v1 v2 = 
   match (v1 <> v2) with

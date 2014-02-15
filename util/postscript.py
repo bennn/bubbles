@@ -75,18 +75,30 @@ class Postscript:
                 "'%s@cornell.edu'" % self.net_id,
             ]))
 
-    def write_failures(self, failures):
+    def write_output(self, output):
         self.change_font(self.HEADER_FONT)
-        self.enscript_stream.write("\nTest failures:\n")
+        self.enscript_stream.write("\nTest Results:\n")
         self.change_font(self.NORMAL_FONT)
-        for fail_tuple in failures:
-            self.enscript_stream.write("%s : %s\n" % fail_tuple)
+        for name,msg in output:
+            self.enscript_stream.write("%s :\n\t%s\n" % (name, msg.replace("\n","")))
+
+    def write_failures(self, num_pass, num_fail):
+        """
+            2013-09-20:
+                Just write the numbers of failures
+        """
+        total = num_pass + num_fail
+        self.change_font(self.HEADER_FONT)
+        self.enscript_stream.write("\n%s/%s TESTS PASS\n" % (num_pass, total))
+        # self.change_font(self.NORMAL_FONT)
+        # for fail_tuple in failures:
+        #     self.enscript_stream.write("%s :\n\t%s\n" % fail_tuple)
         
     def write_nocompile(self, message):
         self.change_font(self.HEADER_FONT)
         self.enscript_stream.write("\nNO COMPILE:\n")
         self.change_font(self.CODE_FONT)
-        self.enscript_stream.write("%s" % message)
+        self.enscript_stream.write(message)
         # Write an email message
         email_subject = "[CS3110 test harness] compile error"
         email_message = "\n".join([
@@ -97,6 +109,10 @@ class Postscript:
             "Automatically generated message from the CS3110 test harness",
         ])
         self.write_email(email_subject, email_message)
+
+    def write_notfound(self):
+        self.change_font(self.HEADER_FONT)
+        self.enscript_stream.write("\nFILE NOT FOUND\n")
 
     def write_success(self):
         self.change_font(self.HEADER_FONT)

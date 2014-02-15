@@ -18,6 +18,7 @@ class Log:
 
     def error(self, msg):
         print(colored("Error: %s" % msg, "red"))
+        exit(1)
 
     def failure(self, msg):
         print(colored(msg, "red"))

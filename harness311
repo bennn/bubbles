@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-import subprocess, sys, re, os
+import glob
+import os
+import re
+import sys
 
 from util.cmsGradesTable import CmsGradesTable
 from util.harness import Harness
@@ -7,28 +10,41 @@ from util.invalidTestException import InvalidTestException
 from util.log import Log
 from util.noCompileException import NoCompileException
 from util.postscript import Postscript
+from util.subprocessWrapper import SubprocessWrapper
 from util.timer import Timer
 
 class Main(object):
 
-    DEFAULT_TIMEOUT = 20
-    github_url = "https://github.com/bennn/bubbles"
-    log = Log()
-    pattern = ""
-    timeout = DEFAULT_TIMEOUT
+    DEFAULT_TIMEOUT = 10
     SUPPORTED_OPTIONS = {
+        "-c" : "--compile-mode : Accepts a script and a list of student directories. Enters each dir, executes the script. Binary pass/fail.",
+        "-d" : "--debug : Print full toplevel output when running test cases.",
+        "-i" : "--include : include all .cma files in the given folder to the path when running tests.",
         "-h" : "--help : Print this message, then exit.",
+        "-n" : "--no-solution : Do not compile solution files",
         "-p" : "--pattern : Only run tests matching the supplied pattern. Trailing glob implied.",
-        "-t" : "--timeout : Set the time limit (in seconds) for tests. Default is %s seconds." % DEFAULT_TIMEOUT,
+        "-t" : "--timeout : Set the time limit (in seconds) for tests. Default is finite, set in util/harness.py.", 
         "-v" : "--version : Echo version number, then exit.",
     }
-    version = "1.00"
+
+    def __init__(self):
+        # TODO stick all the options in a dictionary?
+        self.compile_script = None
+        self.debug = False
+        self.no_solution = False
+        self.timeout = self.DEFAULT_TIMEOUT # Default is in util/harness.py
+        self.include = []
+        self.subprocess = SubprocessWrapper()
+        self.log = Log()
+        self.nocompiles = set([])
+        self.pattern = ""
+        self.version = "1.00"
 
     def find_modules(self, solution_dir, student_dir, pattern):
         """
             2013-07-28:
                 First search `solution_dir` for test cases
-                Ensure that matching implementation files exist (weakly assure)
+                ## Ensure that matching implementation files exist (weakly assure)
                 Finally search `student_dir` for matching implementation files
         """
         find_command = " ".join([
@@ -37,12 +53,7 @@ class Main(object):
             "-name", 
             "'%s*_test.ml'" % pattern,
         ])
-        matchesStr = ""
-        try:
-            matchesStr = subprocess.check_output(find_command, shell=True)
-        except subprocess.CalledProcessError as cpe:
-            self.log.error("Something went horribly wrong finding the solution files located in %s" % solution_dir)
-            exit(1)
+        matchesStr = self.subprocess.execute(find_command)
         # Got solution tests, make sure matching files exist for each
         output = []
         for m in (x for x in matchesStr.split("\n") if x):
@@ -50,33 +61,27 @@ class Main(object):
             sol_dir = "/".join(splitByFolder[:-1])
             test_name = splitByFolder[-1]
             if re.search(r"[\s]", test_name):
-                self.log.warn("Skipping test case '%s'. There should be no whitespace in filenames." % src_name)
+                self.log.warn("Skipping test case '%s'. There should be no whitespace in filenames." % test_name)
             else:
                 module_name = test_name[:-(len("_test.ml"))]
                 sol_name = "%s_sol.ml" % module_name
                 src_name = "%s.ml" % module_name
                 sol = "%s/%s" % (sol_dir, sol_name)
                 if not os.path.exists(sol):
-                    self.log.warn("Skipping test case '%s'. No matching implementation file found." % src_name)
+                    self.log.warn("Just so you know, didn't find a matching implementation file for  '%s'." % src_name)
+                # Find the student file, if exists
+                find_command = " ".join([
+                    "find", 
+                    student_dir, 
+                    "-name", 
+                    "'%s'" % src_name
+                ])
+                matches = self.subprocess.execute(find_command).split("\n")
+                if not matches:
+                    self.log.warn("Could not find student file '%s'" % impl_name)
                 else:
-                    # Find the student file, if exists
-                    find_command = " ".join([
-                        "find", 
-                        student_dir, 
-                        "-name", 
-                        "'%s'" % src_name
-                    ])
-                    try:
-                        matchesStr = subprocess.check_output(find_command, shell=True)
-                        matches = matchesStr.split("\n")
-                    except subprocess.CalledProcessError as cpe:
-                        self.log.error("Something went terribly wrong finding student file '%s'" % src_name)
-                        exit(1)
-                    if not matches:
-                        self.log.warn("Could not find student file '%s'" % impl_name)
-                    else:
-                        stu_dir = "/".join(matches[0].split("/")[:-1])
-                        output.append((module_name, sol_dir, stu_dir))
+                    stu_dir = "/".join(matches[0].split("/")[:-1])
+                    output.append((module_name, sol_dir, stu_dir))
         return output
 
     def parse_args(self, args):
@@ -87,26 +92,49 @@ class Main(object):
                 The timeout should be the first argument, if it exists.
                 Solution directory follows, then all student directories
         """
-        if args[0].startswith("-"):
-            if args[0].startswith("--"):
-                collapsed = args[0][2]
-            else:
-                collapsed = args[0][1]
-            if collapsed == 'p':
-                self.pattern = self._parse_pattern(args[1])
-            elif collapsed == 't':
-                self.timeout = self._parse_timeout(args[1])
-            else:
-                self.log.warn("Unsupported option %s" % args[0])
-            return self.parse_args(args[2:])
-        else: 
-            try:
-                solution_dir = args[0]
-                student_dirs = args[1:]
+        if args[0][min(2, len(args[0])-1)] == "c":
+             # Compile mode
+            self.compile_script = args[1]
+            if not os.path.exists(self.compile_script):
+                self.log.error("Compile script '%s' does not exist! Exiting." % self.compile_script)
+            student_dirs = args[2:]
+            return None, student_dirs
+        try:
+            if args[0].startswith("-"):
+                if args[0].startswith("--"):
+                    collapsed = args[0][2]
+                else:
+                    collapsed = args[0][1]
+                skip = 2
+                if collapsed == 'd':
+                    self.debug = True
+                    # Debug does not take an argument, do not skip ahead
+                    skip = 1
+                elif collapsed == 'n':
+                    self.no_solution = True
+                    skip = 1
+                elif collapsed == 'i':
+                    self.include.append(self._parse_include(args[1]))
+                elif collapsed == 'p':
+                    self.pattern = self._parse_pattern(args[1])
+                elif collapsed == 't':
+                    self.timeout = self._parse_timeout(args[1])
+                else:
+                    self.log.warn("Unsupported option %s" % args[0])
+                return self.parse_args(args[skip:])
+            else: 
+                # Finished processing options, work with the actual directories now.
+                solution_dir = self._strip_trailing_slash(args[0])
+                student_dirs = [self._strip_trailing_slash(d) 
+                    for d in args[1:]]
+                if len(student_dirs) == 0:
+                    # No student directories!
+                    raise IndexError
                 return solution_dir, student_dirs
-            except IndexError:
-                self.print_usage()
-                exit(1)
+        except IndexError:
+            self.print_usage()
+            # TODO when is this called?
+            exit(1)
 
     def print_help(self):
         """
@@ -126,71 +154,98 @@ class Main(object):
             for k in sorted(self.SUPPORTED_OPTIONS.keys()))))
 
     def print_usage(self):
-        print("Usage: harness311 [options] <solution-dir> <student-dir>")
+        print("Usage: harness311 [options] <solution-dir> <student-dir>\n  Run with -h or --help to print help")
 
     def print_version(self):
         """
             2013-08-25:
                 Echo the current version number
         """
-        print("ocamltest version %s\nHome directory: %s\nStay updated at: %s" % (self.version, os.getcwd(), self.github_url))
+        print("harness311 version %s\nHome directory: %s\nStay updated at: %s" % (self.version, os.getcwd(), self.github_url))
 
     def run(self, args):
         """
             2013-08-23:
                 Handle control flow, find the test files to be run,
                 run a harness for each test file
-
-                TODO rename 'harness', to differentiate between those single 
-                harnesses and the entire test suite. I guess 'harness.py' can be
-                'test.py'... it refers to a single file
         """
         # Make sure everything's installed well enough
         self._check_install()
         solution_dir, student_dirs = self.parse_args(args)
-        with CmsGradesTable("./output/grading_comments.csv") as cms:
+        with CmsGradesTable("./output/grading_comments.tab") as cms:
             for student_dir in self._infer_student_directories(student_dirs):
                 net_id = self._net_id(student_dir)
                 with self.log.Student(student_dir):
                     errors = self.run_student(solution_dir, student_dir, net_id)
                     cms.update(net_id, errors)
-            
+        self._log_nocompiles()
+
     def run_student(self, solution_dir, student_dir, net_id):
         """
             2013-08-28:
         """
         # Find test files
-        to_run = list(self.find_modules(solution_dir, student_dir, self.pattern))
+        if self.compile_script is not None:
+            to_run = [("smoke_test", None, student_dir)]
+        else:
+            to_run = list(self.find_modules(solution_dir, student_dir, self.pattern))
         if not bool(to_run):
             # No tests, terminate early
             self.log.warn("Found 0 tests matching pattern")
             return
         # We have tests! Start a timer and run them.
         error_messages = {}
+        failures_by_name = {}
         # TODO this should be a test context. Create a new enscript file, time it, etc
         with Timer() as t:
             for (name, sol_dir, stu_dir) in to_run:
                 output_stream = Postscript(net_id, name)
-                output_stream.write_code("%s/%s.ml" % (stu_dir, name))
-                failed = None
                 try: 
-                    failures = Harness(name, sol_dir, stu_dir, self.timeout).run()
-                    if bool(failures):
-                        output_stream.write_failures(failures)
-                        error_messages[name] = failures
+                    module_name = "%s.ml" % name
+                    student_file = "%s/%s" % (stu_dir, module_name)
+                    harness = Harness(name, sol_dir, stu_dir, debug=self.debug, no_solution=self.no_solution, compile_script=self.compile_script)
+                    harness.set_include(self.include)
+                    harness.set_timeout(self.timeout)
+                    harness.run()
+                    # First write the code
+                    output_stream.write_code(student_file)
+                    # Log all output
+                    all_output = harness.all_output
+                    output_stream.write_output(all_output)
+                    if bool(harness.failures):
+                        # output_stream.write_failures(harness.failures)
+                        output_stream.write_failures(len(harness.successes), len(harness.failures))
+                        # Record stats
+                        for fn_name,_ in harness.failures:
+                            if fn_name not in failures_by_name:
+                                failures_by_name[fn_name] = 0
+                            failures_by_name[fn_name] += 1
+                        error_messages[name] = harness.failures
                     else:
                         output_stream.write_success()
+                # except IOError as e:
+                #     # File not found
+                #     output_stream.write_notfound()
+                #     error_messages[name] = [("FILE NOT FOUND", [])]
                 except NoCompileException as e:
                     output_stream.write_nocompile(e.message)
-                    error_messages[name] = [("NO COMPILE", [e.message])]
+                    error_messages[name] = [("NO COMPILE", e.message)]
+                    self._record_nocompile(net_id, module_name, student_file)
                 except InvalidTestException as e:
+                    # TODO when is this ever raised?
                     # Optionally do something based on status code
                     pass
+                finally:
+                    output_stream.close()
         self.log.header("Summary of Results")
         if bool(error_messages):
-            self.log.pprint_failures(error_messages, t.duration)
+            if self.compile_script is not None:
+                self.log.failure("NO COMPILE")
+            else:
+                self.log.pprint_failures(error_messages, t.duration)
         else: 
             self.log.success("ALL TESTS PASS in %0.3f seconds" % t.duration)
+        self._log_failures(failures_by_name)
         return error_messages
 
     def _check_install(self):
@@ -200,22 +255,23 @@ class Main(object):
                 warnings if it is not.
 
                 Requirements:
-                - OCAMLTEST_HOME env. variable is set. I don't care where it points,
-                    but it's supposed to point to the project root, where you want
-                    to test from by default
                 - ocamltest.ml is installed wherever ocamlc expects to find it
         """
         ocamltest_files = ['ocamltest.cma', 'ocamltest.cmi', 'ocamltest.cmo']
-        find_files = ( subprocess.check_output("find `ocamlc -where` -name '%s'" % fname, shell=True)
-            for fname in ocamltest_files )
-        if not (len(ocamltest_files) == len([x for x in find_files if x])):
-            self.log.error("\n".join([
-                "ocamltest.ml not properly installed. You may either:",
-                "       - Run `make install` with root permissions",
-                "       - Manually compile 'ocamltest.ml', creating a .cma library (`ocamlc -a -o ocamltest.ml`) and then",
-                "         moving 'ocamltest.cma', 'ocamltest.cmo', and 'ocamltest.cmi' to wherever your ocaml standard library files are stored.",
-            ]))
-            exit(1)
+        for fname in ocamltest_files:
+            find_command = "find `ocamlc -where` -name '%s'" % fname
+            found = self.subprocess.execute(find_command)
+            if not found:
+                self.log.error("\n".join([
+                    "ocamltest.ml not properly installed. You may either:",
+                    "       - Run `make install` with root permissions",
+                    "       - Manually compile 'ocamltest.ml', creating a .cma library (`ocamlc -a -o ocamltest.ml`) and then",
+                    "         moving 'ocamltest.cma', 'ocamltest.cmo', and 'ocamltest.cmi' to wherever your ocaml standard library files are stored.",
+                ]))
+        # Make sure output directory exists
+        if not os.path.exists("output"):
+            os.mkdir("output")
+        return
             
     def _net_id(self, filepath):
         if "/" in filepath:
@@ -249,9 +305,30 @@ class Main(object):
             with open(path, 'r') as f:
                 for dirname in f:
                     inferred_student_dirs.append("%s/%s" % (containing_folder, dirname.strip()))
-            return inferred_student_dirs
+            dirs = inferred_student_dirs
         else:
-            return student_dirs
+            dirs = student_dirs
+        # Strip trailing '/'. TODO handle this nicer
+        return [self._strip_trailing_slash(d)
+            for d in dirs]
+
+    def _parse_include(self, dir_name):
+        """
+            2013-09-17:
+                Given the name of a directory, find all the .cma files inside it. 
+                Return a tuple of the path to the directory and the names of each 
+                .cma file
+        """
+        if not os.path.exists(dir_name):
+            self.log.warn("Invalid includes directory %s" % dir_name)
+            return None
+        else: 
+            dir_name = self._strip_trailing_slash(dir_name)
+            # Strip the qualified paths from each file. We just want the .cma
+            cma_files = [full_path[::-1].split("/",1)[0][::-1]
+                for full_path in glob.glob("%s/*.cma" % dir_name)]
+            # Build up a command, for subprocess or whomever
+            return "-I %s %s" % (dir_name, " ".join(cma_files))
 
     def _parse_pattern(self, pattern):
         """
@@ -261,17 +338,62 @@ class Main(object):
         """
         if pattern.startswith("/"):
             self.log.error("Invalid pattern '%s'" % pattern)
-            exit(1)
         return pattern
 
     def _parse_timeout(self, timeout_str):
         try: 
-            timeout = float(args[1])
+            timeout = float(timeout_str)
             if timeout < 0: raise ValueError
         except ValueError:
             self.log.error("-t expected a postive number, received '%s'" % timeout_str)
-            exit(1)
         return timeout
+
+    def _record_nocompile(self, net_id, module_name, src_fname):
+        """
+            2013-09-08:
+                Save the no-compiling file somewhere safe
+        """
+        # TODO is this set even usefal anymore
+        self.nocompiles.add(net_id)
+        nocompile_dir = "./output/nocompiles"
+        # Ensure directories
+        if not os.path.exists(nocompile_dir):
+            os.mkdir(nocompile_dir)
+        if not os.path.exists("%s/%s" % (nocompile_dir, net_id)):
+            os.mkdir("%s/%s" % (nocompile_dir, net_id))
+        # Write file
+        with open("%s/%s/%s" % (nocompile_dir, net_id, module_name), "w") as f:
+            with open(src_fname, 'r') as src:
+                for line in src:
+                    f.write(line)
+
+    def _strip_trailing_slash(self, dirname):
+        """
+            2013-09-17:
+                If the string ends with a '/' character, remove it. 
+                Otherwise do nothing.
+        """
+        if dirname.endswith("/"):
+            dirname = dirname[:-1]
+        return dirname
+
+    def _log_nocompiles(self):
+        """
+            2013-09-08:
+                Write every netid from the set of students that nocompiled 
+        """
+        with open("./output/nocompiles.csv", "w") as f:
+            for net_id in sorted(self.nocompiles):
+                print>>f, net_id
+
+    def _log_failures(self, failures):
+        """
+            2013-09-20:
+                dict of fn_name, num_failures
+        """
+        with open("./output/test_failures_by_name.txt", "w") as f:
+            for fn_name, count in sorted(failures.items(), key=lambda x: -x[1]):
+                print>>f, "%s,%s" % (fn_name, count)
 
 if __name__ == "__main__":
     # First, check the short-circuit options

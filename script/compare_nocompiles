@@ -1,0 +1,67 @@
+#!/usr/bin/env python
+import glob, sys, subprocess
+
+def run(netids_file, nocompiles_dir, new_submissions_dir):
+    """
+        2013-09-08:
+            Accepts two directories:
+            - a bunch of no-compiles, organized into subfolders by netid
+            - a new batch of Submissions, also organized into subfolders by netid
+            
+            For each student in the old dir, find 
+
+            TODO make this classier
+            TODO echo the time submitted?
+    """
+    OUTPUT = "nocompile-judgement.tab"
+    with open(OUTPUT, 'w') as f:
+        print>>f, "\t".join(["NETID","FNAME","RULING"])
+        with open(netids_file, 'r') as g:
+            netids = sorted(set(( x.strip() for x in g.readlines() )))
+        for netid in netids:
+            for module_path in glob.glob("%s/%s/*.ml" % (nocompiles_dir, netid)):
+                module_name = module_path[::-1].split("/",1)[0][::-1]
+                find_command = " ".join([
+                    "find",
+                    "%s/%s/*" % (new_submissions_dir, netid),
+                    "-name",
+                    module_name
+                ])
+                new_file = subprocess.check_output(find_command, shell=True).split("\n")[0]
+                if not new_file:
+                    print("Skipping %s" % module_path)
+                else:
+                    diff_command = " ".join([
+                        "diff",
+                        module_path,
+                        new_file,
+                    ])
+                    try:
+                        diff = subprocess.check_output(diff_command, shell=True)
+                    except subprocess.CalledProcessError as cpe:
+                        print(module_path)
+                        print("-" * 80)
+                        print(cpe.output)
+                        print("-" * 80)
+                        print("Is this change acceptable? (y/n/m :: yes/no/maybe)")
+                        response = raw_input()
+                        while response not in ['y', 'n', 'm', 'yes', 'no', 'maybe']:
+                            print("Please respond with 'y', 'n', or 'm'.")
+                            print("Is this change acceptable? (y/n/m :: yes/no/maybe)")
+                            response = raw_input()
+                        if response[0] == 'y':
+                            ruling = 1
+                        elif response[0] == 'n':
+                            ruling = -1
+                        else:
+                            ruling = 0
+                        print>>f,"\t".join([netid, module_name, str(ruling)])
+
+def print_usage():
+    print("Usage: compare_nocompiles <netids> <old-files-dir> <new-files-dir>\n  Don't worry about de-duplicating the list of netids. We got you covered.")
+
+if __name__=="__main__":
+    if not len(sys.argv) == 4:
+        print_usage()
+    else:
+        run(*sys.argv[1:])

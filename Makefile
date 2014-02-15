@@ -8,7 +8,7 @@ install:
 	echo `ocamlc -where` | xargs cp dump.* 
 	ocamlc -g -o ocamltest.cma -a ocamltest.ml
 	echo `ocamlc -where` | xargs cp ocamltest.* 
-	ln -s `pwd`/harness311 /usr/local/bin/harness311
+	ln -s `pwd`/harness311 /usr/bin/harness311
 
 uninstall:
 	echo `ocamlc -where`/dump.* | xargs rm 

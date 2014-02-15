@@ -1,0 +1,41 @@
+#!/usr/bin/env python
+import csv, sys, os
+
+SEP = "@@@"
+
+def run(input_file, grades_file, output_file):
+    """
+        2013-09-08:
+            Add comments from input file to the grades file
+
+            Comments file should be formatted:
+                name,message
+            on each line
+
+            Grades files can be whatever. The comments just get appended at the end 
+            of the file
+    """
+    # Read in comments to a dictionary, {netid, comments}
+    comments = {}
+    with open(input_file, 'r') as comment_stream:
+        # ignore the first line: they're titles I hope
+        assert(next(comment_stream) == SEP.join(["NetID","Comments\n"]))
+        for line in comment_stream:
+            split = line.strip().split(SEP)
+            netId, msg = split
+            comments[netId] = msg
+    # Write comments to the filefile
+    with open(grades_file, 'r') as grades:
+        with open(output_file, 'w') as output:
+            # Copy over the titles
+            output.write(next(grades))
+            for line in grades:
+                line = line.strip()
+                netId = line.split(",",1)[0]
+                output.write("%s%s\n" % (line, comments.get(netId, "")))
+
+if __name__=="__main__":
+    if not len(sys.argv) == 4:
+        print("Usage: add_comments <comments-file> <grades-file> <output-file>")
+    else:
+        run(*sys.argv[1:])

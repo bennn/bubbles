@@ -5,6 +5,8 @@ class CmsGradesTable:
         2013-09-01:
             Abstraction for posting test harness output to CMS
     """
+    
+    SEPARATOR = "@@@"
 
     def __init__(self, filename):
         """
@@ -17,7 +19,7 @@ class CmsGradesTable:
         """
         self.filename = filename
         self.table = [
-            ["NetID","Grade","Add Comments"],
+            ["NetID","Comments"],
         ]
 
     def __enter__(self):
@@ -27,7 +29,7 @@ class CmsGradesTable:
         self.export()
 
     def add_comment(self, net_id, comment):
-        self.table.append([net_id, "", comment])
+        self.table.append([net_id, comment])
 
     def export(self):
         """
@@ -36,18 +38,14 @@ class CmsGradesTable:
         """
         with open(self.filename, 'w') as f:
             for row in self.table:
-                print>>f, ",".join(row)
+                print>>f, self.SEPARATOR.join(row)
 
     def serialize(self, message):
         """
             2013-09-01:
                 Convert `message` into a string safe for CMS
-
-                TODO right now:
-                - removes " characters (so they don't end the open/closing quotes in the .csv file)
-                - htmlserializes: < --- &lt;  and stuff like that
         """
-        return cgi.escape("".join(( c for c in message if c != "\"" )))
+        return cgi.escape("".join(( c.replace("\n", "<br/>") for c in message if c != "\"" )))
 
     def update(self, net_id, errors):
         """
@@ -71,7 +69,7 @@ class CmsGradesTable:
                 cms_message.append("</ul>")    
             # Close the paragraph and string
             cms_message.append("</p>\"")
-            self.add_comment(net_id, "\n".join(cms_message))
+            self.add_comment(net_id, "".join(cms_message))
 
     def _heading(self, net_id):
         return "<h2>Automated test results for %s</h2>" % net_id

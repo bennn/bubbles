@@ -4,3 +4,6 @@
 *.swp
 *.out
 *.pyc
+
+bubbles.ini
+github-cli.exe

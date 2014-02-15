@@ -16,11 +16,11 @@ def comment_of_numsent(num_sent):
     elif num_sent < 55:
         return "Glad that's over."
     elif num_sent < 150:
-        return "Is everything alright?"
+        return "That was a lot of messages. Is everything alright?"
     elif num_sent < 200:
         return "What the heck are we sending so many emails for?"
     else:
-        return "THAT WAS RIDICULOUS"
+        return "THAT WAS A RIDICULOUS AMOUNT OF EMAIL"
 
 def infer_emaildir():
     """
