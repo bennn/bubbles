@@ -1,10 +1,13 @@
-import os, re, subprocess
+import os
+import re
 
 from util.invalidTestException import InvalidTestException
 from util.log import Log
-from util.timer import Timer
+from util.noCompileException import NoCompileException
+from util.subprocessWrapper import SubprocessWrapper
 from util.timedProcess import TimedProcess
 from util.timeoutException import TimeoutException
+from util.timer import Timer
 
 class RunTest:
     """
@@ -25,6 +28,7 @@ class RunTest:
 
     def __init__(self, test_file, timeout):
         self.log = Log()
+        self.subprocess = SubprocessWrapper()
         self.timeout = timeout
         
         self.test_file = test_file
@@ -55,22 +59,22 @@ class RunTest:
         src_cmo = "%s.cmo" % self.src_file[:-(len(".ml"))]
         # 2013-08-23: Use '-i' option to just generate the interface for the function
         infer_interface = "%s -i %s %s" % (base_command, src_cmo, self.test_file)
-        try:
-            # Compile both files, then infer and return the interface
-            subprocess.check_output(compile_all, shell=True, stderr=subprocess.STDOUT)
-            # 2013-08-23: Reached this line without making a .cmo Dear diary, this was bad
-            interface = subprocess.check_output(infer_interface, shell=True)
-            return interface.split("\n")
-        except subprocess.CalledProcessError as cpe:
-            # NO COMPILEEEEEEEE
-            err_msg = cpe.output.strip()
-            # 2013-08-23: Retrieve failing line from the file
-            sourceError = self._source_of_exception(err_msg)
-            # Put the OCaml exception + line from source into one string. 
-            # Replace vanilla newlines with indented newlines.
-            nocompile_msg = ("%s\n%s" % (err_msg, sourceError)).replace("\n", "\n  ")
-            self.log.nocompile(nocompile_msg)
-            raise InvalidTestException(1)
+        # Compile both files, then infer and return the interface
+        self.subprocess.execute(compile_all, on_failure=self.compile_error)
+        # 2013-08-23: Reached this line without making a .cmo Dear diary, this was bad
+        interface = self.subprocess.execute(infer_interface)
+        return interface.split("\n")
+
+    def compile_error(self, cpe):
+        # NO COMPILEEEEEEEE
+        err_msg = cpe.output.strip()
+        # 2013-08-23: Retrieve failing line from the file
+        sourceError = self._source_of_exception(err_msg)
+        # Put the OCaml exception + line from source into one string. 
+        # Replace vanilla newlines with indented newlines.
+        nocompile_msg = ("%s\n%s" % (err_msg, sourceError)).replace("\n", "\n  ")
+        self.log.nocompile(nocompile_msg)
+        raise NoCompileException(1)
 
     def generate_scripts(self, test_interface):
         """
