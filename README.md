@@ -1,7 +1,12 @@
 bubbles
 =======
 A simple unit testing framework for OCaml.
-It's a modest little package.
+It's sadly a relic of the past.
+I think the [cs3110 tools](http://github.com/cs3110/tools) do testing better.
+
+This harness has advantages, but I think the other is more usable.
+More usable, less magic.
+And usability is what unit testing is all about.
 
 `ocamltest`, the executable, handles files without dependencies very well.
 It provided the basis for the Fall 2013 test harness for CS3110 after a few modifications (see the harness branch), but never really succeeded at compiling large OCaml projects.
