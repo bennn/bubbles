@@ -1,29 +1,32 @@
 bubbles
 =======
-A simple unit testing framework for OCaml.
-It's sadly a relic of the past.
-I think the [cs3110 tools](http://github.com/cs3110/tools) do testing better.
+A deprecated unit testing framework for OCaml.
+Use the [cs3110 tools CLI](http://github.com/cs3110/tools) instead.
 
-This harness has advantages, but I think the other is more usable.
-More usable, less magic.
-And usability is what unit testing is all about.
 
-`ocamltest`, the executable, handles files without dependencies very well.
-It provided the basis for the Fall 2013 test harness for CS3110 after a few modifications (see the harness branch), but never really succeeded at compiling large OCaml projects.
-Still, I'm happy with it; using the script is as easy as I wanted it to be.
+Overview
+--------
 
-CS 3110 has since migrated to an [ocamlbuild](http://brion.inria.fr/gallium/index.php/Ocamlbuild)/[pa\_ounit](https://github.com/janestreet/pa_ounit) based test harness.
-That project has its own github page, found [here](https://github.com/cs3110/tools/tree/master/cs3110-cli).
-One day this project may migrate to ocamlbuild, but I think I'll leave it as-is.
-My focus is on maintaining the CS 3110 tools.
+Running `ocamltest file.ml` should search for a file named `file_test.ml`
+and execute any unit tests within `file_test.ml` with `file.ml` in scope.
 
-Disclaimer
-----------
+Unit tests are `unit -> unit` functions with names prefixed by the string `test_`.
+
+This tester was the basis for the Fall 2013 test harness for CS3110, but it never
+worked well for files with dependencies.
+
+Looking back, the timeouts, "all tests pass" message, and recursive globbing
+were the most fun features.
+
+
+Requirements
+------------
 * This project requires <a href="http://www.gnu.org/software/make/">gnumake</a>
 * This project requires Python 2.7
 * This project requires OCaml. It has been developed with 4.01.0 but probably works with 3.12.
 * This project does not currently support the testing of files with dependancies.
 * This project does not work on Windows. Sorry.
+
 
 Core Philosophy
 ---------------
@@ -32,13 +35,16 @@ That's really all this project is about.
 
 Under this framework, you only need to write complimentary `_test` modules to your main code and define test functions within them.
 Every test in a test module is run in an isolated toplevel environment.
-All the finding, compiling, timeouts, and logging is taken care of.
+All the finding, compiling, timeouts, and logging is taken care of
+(by the Python testing environment).
+
 
 How does it work?
 -----------------
 The `ocamltest` executable searches for modules ending with `_test.ml`.
 Within those files, it searches for `unit -> unit` functions that begin with the prefix `test_` and then runs each testcase in a separate environment.
 That's all you need to start testing: a script and a `_test.ml` script.
+
 
 Installation
 ------------
@@ -47,9 +53,11 @@ Installation
 2. Run `make install`. You will likely need root permissions
 3. (Optional) Set the `OCAMLTEST_HOME` environment variable to the root folder of whatever project you want to run tests in.
 
+
 Uninstallation
 --------------
 Run `make uninstall` with root permissions.
+
 
 Usage
 -----
@@ -57,6 +65,7 @@ Usage
 2. Make a test file `mymodule_test.ml`. The `_test` suffix is important!
    Test file should contain `unit -> unit` functions with the prefix `test_`. These are the test cases. Other functions and modules may be defined inside the test file, but those will not be executed as part of the suite.
 3. Run `ocamltest mymodule` and hope for the best.
+
 
 Example
 -------
@@ -116,6 +125,7 @@ Now we can run the tests:
 
 and party. "ALL TESTS PASS"
 
+
 Explanation
 -----------
 There's a bit going on in `my_lists_test.ml`, so let's break that down:
@@ -124,11 +134,13 @@ There's a bit going on in `my_lists_test.ml`, so let's break that down:
 * Functions `test_length1` through `test_length4` are the test cases. Those get run. Their output decides wheter the suite passed or failed.
 * `helper` is an auxillary function, defined for convenience right smack in the middle of the file. It is ignored by the harness, but `test_length4` uses it. Note that this function may not be called by test 1 through 3, because it (`helper`) was not in scope when they (tests 1 - 3) were defined.
 
+
 Shared State
 ------------
 If you'd like to define variables for the test cases to access, just declare them before you declare the test case. Test modules are compiled just like any other, from top to bottom. Preferred convention is to keep all your helpers and variables inside a module defined at the very top of the test file. This way, the variables are easy to locate within a test file and _all_ test test cases can access them.
 
 There no support for referencing external modules. The `State` module or its equivalents, if you choose to define them, __must__ exist within either the source code or the test file.
+
 
 Globbing
 --------
@@ -145,14 +157,10 @@ Actually, you can do even better. Leading and trailing asterisks are implicit, s
 You get the idea. Be careful getting too lazy if you have lots of test files around and don't want to run 'em all. Or don't be careful and just run all the tests all the time.
 This pattern matching is maybe a bit too eager. Let me know if you hate it.
 
+
 Finding Test Files
 ------------------
 
 By default, `ocamltest mymodule` searches for files matching the pattern "mymodule" in the current working directory and its containing folders. You can change this behavior. 
 `ocamltest -d <dirname> mymodule` starts the search in the directory `dirname`, instead of the current directory. The `--directory` option does the same thing. Also, you can set the environment variable `OCAMLTEST_HOME`, which causes the harness to search from that directory instead of the current one. It's like running `ocamltest -d $OCAMLTEST_HOME mymodule`, just with less typing.
 
-- - -
-
-_Author_: Ben Greenman
-
-_Last Updated_: 2014-02-15
